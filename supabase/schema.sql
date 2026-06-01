@@ -1,5 +1,5 @@
 -- =============================================================
--- Bordir Bordir POS — Supabase schema (Enterprise edition, fully idempotent)
+-- Bordir Skupy POS — Supabase schema (Enterprise edition, fully idempotent)
 -- Run in Supabase Dashboard → SQL Editor → New query → Run
 --
 -- SAFE TO RE-RUN: every statement is wrapped with IF NOT EXISTS,
@@ -13,7 +13,7 @@
 CREATE TABLE IF NOT EXISTS public.settings (
   id            integer PRIMARY KEY DEFAULT 1,
   name          text DEFAULT 'Bordir Skupy',
-  tagline       text DEFAULT 'Cetak Impian, Wujudkan Karya',
+  tagline       text DEFAULT 'Cetak Custom Produkmu Disini!!!',
   address       text DEFAULT '',
   phone         text DEFAULT '',
   email         text DEFAULT '',
@@ -308,7 +308,7 @@ INSERT INTO public.settings (id, name, tagline, address, phone, email, bank_name
 VALUES (
   1,
   'Bordir Skupy',
-  'Cetak Impian, Wujudkan Karya',
+  'Cetak Custom Produkmu Disini!!!',
   'Pasar Tanah Abang Blok B Lt.1 Los G No.160-161, Jakarta Pusat 10240',
   '081117001155',
   '',

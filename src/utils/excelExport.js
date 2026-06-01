@@ -69,10 +69,10 @@ export function exportTransactionsXLSX(transactions, storeInfo = {}, options = {
   // ===== SHEET 1: DASHBOARD RINGKASAN =====
   {
     const aoa = []
-    aoa.push([`${storeInfo.name || 'Bordir Skupy'} — REKAP TRANSAKSI`])
-    if (storeInfo.tagline) aoa.push([storeInfo.tagline])
-    if (storeInfo.address) aoa.push([storeInfo.address])
-    if (storeInfo.phone) aoa.push([`Telp: ${storeInfo.phone}`])
+    aoa.push([`${storeInfo?.name || 'Bordir Skupy'} — REKAP TRANSAKSI`])
+    if (storeInfo?.tagline) aoa.push([storeInfo?.tagline])
+    if (storeInfo?.address) aoa.push([storeInfo?.address])
+    if (storeInfo?.phone) aoa.push([`Telp: ${storeInfo?.phone}`])
     aoa.push([])
     aoa.push([`Periode: ${periodLabel}`])
     aoa.push([`Dibuat: ${new Date().toLocaleString('id-ID')}`])

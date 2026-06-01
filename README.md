@@ -1,4 +1,4 @@
-# 🖨️ Bordir Bordir POS — Enterprise Printing POS
+# 🖨️ Bordir Skupy POS — Enterprise Printing POS
 
 Aplikasi kasir (POS) modern premium untuk usaha printing — luxury dark UI, glassmorphism, **fully responsive (desktop + iPad + iPhone)**, backed by Supabase.
 

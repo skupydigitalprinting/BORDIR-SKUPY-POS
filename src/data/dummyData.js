@@ -301,7 +301,7 @@ export const DEFAULT_TRANSACTIONS = [
 
 export const STORE_INFO = {
   name: 'Bordir Skupy',
-  tagline: 'Cetak Impian, Wujudkan Karya',
+  tagline: 'Cetak Custom Produkmu Disini!!!',
   address: 'Pasar Tanah Abang Blok B Lt.1 Los G No.160-161, Jakarta Pusat 10240',
   phone: '081117001155',
   email: '',

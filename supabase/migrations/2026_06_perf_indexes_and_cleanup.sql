@@ -1,5 +1,5 @@
 -- =====================================================================
--- Bordir Bordir POS — Migration: Performance Tuning (indexes + items cleanup)
+-- Bordir Skupy POS — Migration: Performance Tuning (indexes + items cleanup)
 -- =====================================================================
 -- Tujuan : Menurunkan loading awal & latency refresh halaman.
 --          Mengecilkan ukuran tabel `transactions` dengan menghapus

@@ -60,7 +60,7 @@ function LoadingSplash() {
             letterSpacing: '0.01em',
           }}
         >
-          Cetak Impian, Wujudkan Karya
+          Cetak Custom Produkmu Disini!!!
         </div>
       </div>
 

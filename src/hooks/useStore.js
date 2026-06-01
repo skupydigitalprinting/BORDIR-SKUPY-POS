@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, isSupabaseConfigured, uploadLogo, deleteLogo } from '../lib/supabase'
+import { STORE_INFO as DEFAULT_STORE } from '../data/dummyData'
 
 // Session persistence — keep user logged in across browser refresh.
 // Uses localStorage to remember the admin id; on init, we re-fetch from
@@ -164,7 +165,7 @@ export function useStore() {
   const [busy, setBusy] = useState(false)
   const [products, setProducts] = useState([])
   const [transactions, setTransactions] = useState([])
-  const [storeInfo, setStoreInfo] = useState(null)
+  const [storeInfo, setStoreInfo] = useState(DEFAULT_STORE)
   const [admins, setAdmins] = useState([])
   const [customers, setCustomers] = useState([])
   const [debts, setDebts] = useState([])
@@ -197,11 +198,7 @@ export function useStore() {
       ])
       for (const r of [s, a, p, t, c, d]) if (r.error) throw r.error
       if (!mounted.current) return
-      setStoreInfo(settingsFromDB(s.data) || {
-        name: 'Bordir Skupy', tagline: '', address: 'Pasar Tanah Abang Blok B Lt.1 Los G No.160-161, Jakarta Pusat 10240', phone: '081117001155', email: '',
-        bank: { name: 'Bank BCA', number: '2064447555', holder: 'Hardha Perdana' },
-        frontLogo: '', invoiceLogo: '', taxRate: 0,
-      })
+      setStoreInfo(settingsFromDB(s.data) || DEFAULT_STORE)
       const allAdmins = (a.data || []).map(adminFromDB)
       setAdmins(allAdmins)
       // Validate restored session: if user no longer exists, clear it

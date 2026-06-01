@@ -1,5 +1,5 @@
 -- =====================================================================
--- Bordir Bordir POS — Migration: Sinkronisasi realtime, FK cascade, format
+-- Bordir Skupy POS — Migration: Sinkronisasi realtime, FK cascade, format
 --                        invoice harian, dan kolom pendukung.
 -- =====================================================================
 -- Tujuan :

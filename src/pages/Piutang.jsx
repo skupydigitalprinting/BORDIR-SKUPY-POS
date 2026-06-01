@@ -18,7 +18,7 @@ const STATUS_OPTIONS = [
 ]
 
 export default function Piutang({
-  debts, customers, transactions, stats,
+  debts, customers, transactions, stats, storeInfo,
   payDebt, deleteDebt, getDebtPayments,
 }) {
   const toast = useToast()

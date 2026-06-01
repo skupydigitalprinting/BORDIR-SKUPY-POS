@@ -1,5 +1,5 @@
 -- =====================================================================
--- Bordir Bordir POS — Migration: Tambahkan kolom `due_date` ke tabel transactions
+-- Bordir Skupy POS — Migration: Tambahkan kolom `due_date` ke tabel transactions
 -- =====================================================================
 -- Tujuan : Memperbaiki error
 --          "Could not find the 'due_date' column of 'transactions' in the schema cache"

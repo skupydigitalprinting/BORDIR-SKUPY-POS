@@ -53,10 +53,10 @@ export default function Settings({
   useEffect(() => {
     if (open && storeInfo) {
       setTokoForm({
-        name: storeInfo.name || '',
-        tagline: storeInfo.tagline || '',
-        address: storeInfo.address || '',
-        phone: storeInfo.phone || '',
+        name: storeInfo?.name || '',
+        tagline: storeInfo?.tagline || '',
+        address: storeInfo?.address || '',
+        phone: storeInfo?.phone || '',
         bankName: storeInfo.bank?.name || '',
         bankNumber: storeInfo.bank?.number || '',
         bankHolder: storeInfo.bank?.holder || '',
