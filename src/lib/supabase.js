@@ -9,7 +9,7 @@ if (!isSupabaseConfigured && typeof window !== 'undefined') {
   // Log once at startup so missing env is visible in DevTools
   // eslint-disable-next-line no-console
   console.warn(
-    '[Skupy] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing. ' +
+    '[Bordir] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing. ' +
     'Copy .env.example → .env and fill in your Supabase credentials.'
   )
 }

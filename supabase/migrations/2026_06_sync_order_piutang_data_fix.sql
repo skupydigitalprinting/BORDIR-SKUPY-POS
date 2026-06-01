@@ -1,5 +1,5 @@
 -- =====================================================================
--- Skupy POS — Data Fix: Sinkronisasi Order ↔ Piutang ↔ Customer
+-- Bordir Bordir POS — Data Fix: Sinkronisasi Order ↔ Piutang ↔ Customer
 -- =====================================================================
 -- Tujuan : Memperbaiki data lama dimana invoice di halaman Order sudah
 --          LUNAS tetapi di halaman Piutang masih AKTIF (dan sebaliknya).

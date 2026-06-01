@@ -1,15 +1,18 @@
 import React from 'react'
 
 /**
- * Skupy Logo — inline SVG with optional custom image override.
+ * Skupy Bordir Logo — inline SVG (yellow wordmark on dark) with optional
+ * custom image override.
  *
  * Props:
  *   size       — pixel size (default 40)
- *   variant    — 'icon' (default) or 'full' (icon + wordmark)
- *   onLight    — adapt for light background
+ *   variant    — 'icon' (default) or 'full' (icon + "Skupy / BORDIR" wordmark)
+ *   onLight    — adapt for light background (invoice). Mark stays yellow.
  *   customSrc  — if provided, render this image instead of the built-in SVG
  *                (base64 data URL or http URL)
  */
+const YELLOW = '#F2E500'
+
 export default function Logo({
   size = 40,
   variant = 'icon',
@@ -18,8 +21,6 @@ export default function Logo({
   className = '',
   style = {},
 }) {
-  const id = React.useId().replace(/:/g, '')
-
   // If user uploaded a custom logo, render it as <img>
   if (customSrc) {
     if (variant === 'full') {
@@ -57,6 +58,10 @@ export default function Logo({
     )
   }
 
+  // Color of the gaps that carve the "$" out of the S — matches background
+  const gap = onLight ? '#ffffff' : '#0a0a0f'
+
+  // ── Blocky "$ / S" mark (yellow) ──────────────────────────────────
   const Icon = (
     <svg
       width={size}
@@ -66,61 +71,55 @@ export default function Logo({
       style={style}
       className={className}
     >
-      <defs>
-        <linearGradient id={`gS-${id}`} x1="20%" y1="0%" x2="80%" y2="100%">
-          <stop offset="0%" stopColor="#a3ff3a" />
-          <stop offset="35%" stopColor="#06d6f5" />
-          <stop offset="65%" stopColor="#6e3aff" />
-          <stop offset="100%" stopColor="#ff2dbe" />
-        </linearGradient>
-        <linearGradient id={`gAccent-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#a3ff3a" />
-          <stop offset="100%" stopColor="#fff200" />
-        </linearGradient>
-      </defs>
-
       {!onLight && <rect width="100" height="100" rx="22" fill="#0a0a0f" />}
-
-      <path d="M30,20 L62,20 L62,32 L42,32 L42,40 L30,40 Z" fill={`url(#gS-${id})`} />
-      <path d="M30,40 L70,40 L70,60 L30,60 Z" fill={`url(#gS-${id})`} opacity="0.92" />
-      <path d="M30,60 L58,60 L58,68 L70,68 L70,80 L30,80 Z" fill={`url(#gS-${id})`} />
-      <rect x="48" y="12" width="4" height="78" fill="#0a0a0f" />
-      <rect x="62" y="20" width="10" height="10" fill={`url(#gAccent-${id})`} />
-      <rect x="22" y="68" width="10" height="12" fill="#ff2dbe" />
+      {/* S body — three stacked blocks */}
+      <path d="M26,18 L64,18 L64,34 L44,34 L44,42 L26,42 Z" fill={YELLOW} />
+      <path d="M26,42 L74,42 L74,58 L26,58 Z" fill={YELLOW} />
+      <path d="M26,58 L58,58 L58,66 L74,66 L74,82 L26,82 Z" fill={YELLOW} />
+      {/* Vertical dollar bar through the middle */}
+      <rect x="47" y="10" width="6" height="80" fill={YELLOW} />
+      {/* notch gaps so the bar reads as a "$" */}
+      <rect x="44" y="46" width="12" height="6" fill={gap} />
+      <rect x="44" y="62" width="12" height="6" fill={gap} />
     </svg>
   )
 
   if (variant === 'icon') return Icon
 
+  // ── Full lockup: mark + "Skupy" over "BORDIR" ─────────────────────
   return (
     <div
       className={className}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: size * 0.18, ...style }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: size * 0.22, ...style }}
     >
       {Icon}
       <svg
-        height={size * 0.62}
-        viewBox="0 0 200 80"
+        height={size * 0.82}
+        viewBox="0 0 240 110"
         xmlns="http://www.w3.org/2000/svg"
         style={{ display: 'block' }}
       >
-        <defs>
-          <linearGradient id={`gText-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#a3ff3a" />
-            <stop offset="100%" stopColor="#fff200" />
-          </linearGradient>
-        </defs>
         <text
           x="0" y="58"
-          fontFamily="Syne, sans-serif"
-          fontWeight="800"
-          fontSize="64"
-          fill={`url(#gText-${id})`}
-          letterSpacing="-2"
+          fontFamily="DM Sans, Syne, sans-serif"
+          fontWeight="700"
+          fontSize="62"
+          fill={YELLOW}
+          letterSpacing="-1"
         >
           Skupy
         </text>
-        <rect x="0" y="68" width="180" height="3" rx="1.5" fill={`url(#gText-${id})`} />
+        <rect x="2" y="68" width="216" height="5" rx="2.5" fill={YELLOW} />
+        <text
+          x="2" y="104"
+          fontFamily="Syne, DM Sans, sans-serif"
+          fontWeight="800"
+          fontSize="34"
+          fill={YELLOW}
+          letterSpacing="2"
+        >
+          BORDIR
+        </text>
       </svg>
     </div>
   )

@@ -38,16 +38,16 @@ function LoadingSplash() {
           style={{
             fontFamily: 'Syne, sans-serif',
             fontWeight: 800,
-            fontSize: 'clamp(56px, 16vw, 120px)',
-            color: '#ffffff',
+            fontSize: 'clamp(48px, 14vw, 104px)',
+            color: '#F2E500',
             letterSpacing: '-0.04em',
-            lineHeight: 1,
-            // subtle gradient glow under the wordmark
+            lineHeight: 0.95,
+            // subtle yellow glow under the wordmark
             textShadow:
-              '0 0 24px rgba(139,92,246,0.35), 0 0 48px rgba(99,102,241,0.18)',
+              '0 0 24px rgba(242,229,0,0.35), 0 0 48px rgba(242,229,0,0.18)',
           }}
         >
-          SKUPY
+          SKUPY<br />BORDIR
         </div>
         <div
           style={{

@@ -300,15 +300,15 @@ export const DEFAULT_TRANSACTIONS = [
 ]
 
 export const STORE_INFO = {
-  name: 'Skupy Printing',
+  name: 'Skupy Bordir',
   tagline: 'Cetak Impian, Wujudkan Karya',
-  address: 'Jl. Lontar Atas No.111 RT.03 RW.12 Kel. Kebon Melati, Kec. Tanah Abang, Jakarta Pusat 10230',
-  phone: '081255577705',
-  email: 'hello@skupyprinting.com',
+  address: 'Pasar Tanah Abang Blok B Los G No.160-161 Jakarta 10240',
+  phone: '081117001155',
+  email: 'hello@skupybordir.com',
   bank: {
     name: 'Bank BCA',
     holder: 'Hardha Perdana',
-    number: '2065033222',
+    number: '2064447555',
   },
   taxRate: 0,
 }

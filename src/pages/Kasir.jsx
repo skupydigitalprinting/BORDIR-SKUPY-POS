@@ -160,7 +160,7 @@ export default function Kasir({ products, customers = [], addTransaction, storeI
     })
   }, [products, search, category])
 
-  // NO QUANTITY LIMITS — Skupy POS sells made-to-order goods (sablon, DTF,
+  // NO QUANTITY LIMITS — Bordir Skupy POS sells made-to-order goods (sablon, DTF,
   // jersey, kain) so customers freely order 1, 58, 500, 1.000, 10.000+ unit.
   // We intentionally ignore product.stock as a cap; stock decrement on the
   // backend still happens (Math.max-floored at 0) but the cart is unbounded.

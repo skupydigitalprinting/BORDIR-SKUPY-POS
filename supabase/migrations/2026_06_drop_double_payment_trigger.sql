@@ -1,5 +1,5 @@
 -- =====================================================================
--- Skupy POS — Migration: HOTFIX bug pembayaran terpotong dobel
+-- Bordir Bordir POS — Migration: HOTFIX bug pembayaran terpotong dobel
 -- =====================================================================
 -- Tujuan : Memperbaiki bug "bayar Rp1.000.000 mengurangi Rp2.000.000".
 --

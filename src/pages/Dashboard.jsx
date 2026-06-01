@@ -201,7 +201,7 @@ export default function Dashboard({ stats, transactions, debts = [], admins = []
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold mt-0.5"
                   style={{ fontFamily: 'Syne', color: 'var(--text-primary)' }}>
-                  {storeInfo?.name || 'Skupy POS'}
+                  {storeInfo?.name || 'Bordir Skupy POS'}
                 </h2>
               </div>
             </div>

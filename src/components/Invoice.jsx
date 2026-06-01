@@ -143,7 +143,7 @@ export default function Invoice({ transaction: t, onClose, storeInfo, autoShare 
       `Total:`,
       formatRupiah(t.total),
       ``,
-      `Terima kasih telah menggunakan layanan SKUPY.`,
+      `Terima kasih telah menggunakan layanan BORDIR SKUPY.`,
     ].join('\n')
 
     try {
@@ -384,7 +384,7 @@ export default function Invoice({ transaction: t, onClose, storeInfo, autoShare 
             <div style={{
               height: 8,
               margin: '0 -40px 36px',
-              background: 'linear-gradient(90deg, #a3ff3a 0%, #06d6f5 35%, #6e3aff 65%, #ff2dbe 100%)',
+              background: 'linear-gradient(90deg, #F2E500 0%, #ffe600 50%, #d4c800 100%)',
               borderTopLeftRadius: 16,
               borderTopRightRadius: 16,
             }} />
@@ -616,7 +616,7 @@ export default function Invoice({ transaction: t, onClose, storeInfo, autoShare 
                   fontFamily: '"Bree Serif", serif',
                 }}>
                   <div style={{
-                    fontSize: 12.5, color: '#a3ff3a', letterSpacing: '0.04em',
+                    fontSize: 12.5, color: '#F2E500', letterSpacing: '0.04em',
                     fontFamily: '"Bree Serif", serif',
                   }}>
                     {STORE_INFO.bank?.name || '-'}
@@ -815,11 +815,14 @@ export default function Invoice({ transaction: t, onClose, storeInfo, autoShare 
             }}>
               <div style={{ flex: 1, minWidth: 240 }}>
                 <div style={infoLabel}>Catatan</div>
-                <p style={{ fontSize: 11, color: '#55556a', lineHeight: 1.6, marginBottom: 6 }}>
-                  Terima kasih atas kepercayaan Anda. Pembayaran via transfer ke <strong>{STORE_INFO.bank?.name} {STORE_INFO.bank?.number}</strong> a.n. <strong>{STORE_INFO.bank?.holder}</strong>.
+                <p style={{ fontSize: 11, color: '#55556a', lineHeight: 1.7, marginBottom: 5 }}>
+                  Terima kasih atas kepercayaan Anda kepada <strong>{STORE_INFO.name}</strong>.
                 </p>
-                <p style={{ fontSize: 11, color: '#55556a', lineHeight: 1.6 }}>
-                  Untuk pertanyaan, hubungi {STORE_INFO.phone}.
+                <p style={{ fontSize: 11, color: '#55556a', lineHeight: 1.7, marginBottom: 5 }}>
+                  Pembayaran via transfer ke <strong>{STORE_INFO.bank?.name} {STORE_INFO.bank?.number}</strong> a.n. <strong>{STORE_INFO.bank?.holder}</strong>.
+                </p>
+                <p style={{ fontSize: 11, color: '#55556a', lineHeight: 1.7 }}>
+                  Pertanyaan &amp; konfirmasi: <strong>{STORE_INFO.phone}</strong> ({STORE_INFO.address}).
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>

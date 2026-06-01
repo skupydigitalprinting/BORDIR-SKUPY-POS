@@ -38,7 +38,7 @@ export function buildWaLink(phone, text) {
 
 export const TEMPLATES = {
   chat: ({ name }) =>
-    `Halo ${name || 'Customer'}, terima kasih sudah berbelanja di Skupy Printing. Semoga selalu puas dengan layanan kami 🙏`,
+    `Halo ${name || 'Customer'}, terima kasih sudah berbelanja di Bordir Skupy. Semoga selalu puas dengan layanan kami 🙏`,
 
   reminder: ({ name, remaining, invoiceNo, dueDate }) => {
     const lines = [
@@ -52,7 +52,7 @@ export const TEMPLATES = {
     return lines.join('\n')
   },
 
-  invoice: ({ name, invoiceNo, total, link, storeName = 'Skupy Printing' }) => {
+  invoice: ({ name, invoiceNo, total, link, storeName = 'Bordir Skupy' }) => {
     const lines = [
       `Halo ${name || 'Customer'}, berikut invoice pesanan Anda:`,
       ``,

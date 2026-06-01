@@ -37,7 +37,7 @@ export default function Sidebar({
           <div className="min-w-0">
             <div className="font-bold text-sm leading-tight truncate"
               style={{ fontFamily: 'Syne', color: 'var(--text-primary)' }}>
-              {(storeInfo?.name || 'Skupy').split(' ')[0]} POS
+              {(storeInfo?.name || 'Bordir').split(' ')[0]} POS
             </div>
             <div className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
               Printing Studio
