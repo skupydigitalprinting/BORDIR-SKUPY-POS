@@ -12,7 +12,7 @@
 
 CREATE TABLE IF NOT EXISTS public.settings (
   id            integer PRIMARY KEY DEFAULT 1,
-  name          text DEFAULT 'Bordir Bordir',
+  name          text DEFAULT 'Bordir Skupy',
   tagline       text DEFAULT 'Cetak Impian, Wujudkan Karya',
   address       text DEFAULT '',
   phone         text DEFAULT '',
@@ -307,17 +307,25 @@ END $$;
 INSERT INTO public.settings (id, name, tagline, address, phone, email, bank_name, bank_number, bank_holder, tax_rate)
 VALUES (
   1,
-  'Bordir Bordir',
+  'Bordir Skupy',
   'Cetak Impian, Wujudkan Karya',
-  'Jl. Lontar Atas No.111 RT.03 RW.12 Kel. Kebon Melati, Kec. Tanah Abang, Jakarta Pusat 10230',
-  '081255577705',
-  'hello@bordirprinting.com',
+  'Pasar Tanah Abang Blok B Lt.1 Los G No.160-161, Jakarta Pusat 10240',
+  '081117001155',
+  '',
   'Bank BCA',
-  '2065033222',
+  '2064447555',
   'Hardha Perdana',
   0
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  name        = EXCLUDED.name,
+  tagline     = EXCLUDED.tagline,
+  address     = EXCLUDED.address,
+  phone       = EXCLUDED.phone,
+  email       = EXCLUDED.email,
+  bank_name   = EXCLUDED.bank_name,
+  bank_number = EXCLUDED.bank_number,
+  bank_holder = EXCLUDED.bank_holder;
 
 INSERT INTO public.admins (username, password, name, role)
 VALUES ('admin', 'admin', 'Admin Utama', 'owner')

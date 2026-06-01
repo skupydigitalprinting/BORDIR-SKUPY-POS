@@ -237,6 +237,7 @@ function AppShell() {
     customers: <Customers
       customers={store.customers}
       transactions={scopedTransactions}
+      storeInfo={store.storeInfo}
       addCustomer={store.addCustomer}
       updateCustomer={store.updateCustomer}
       deleteCustomer={store.deleteCustomer}
@@ -245,6 +246,7 @@ function AppShell() {
       debts={scopedDebts}
       customers={store.customers}
       transactions={scopedTransactions}
+      storeInfo={store.storeInfo}
       stats={store.stats}
       payDebt={store.payDebt}
       deleteDebt={store.deleteDebt}

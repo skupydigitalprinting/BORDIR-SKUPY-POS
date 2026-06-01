@@ -143,7 +143,7 @@ export default function Invoice({ transaction: t, onClose, storeInfo, autoShare 
       `Total:`,
       formatRupiah(t.total),
       ``,
-      `Terima kasih telah menggunakan layanan BORDIR SKUPY.`,
+      `Terima kasih telah menggunakan layanan ${STORE_INFO.name || ''}.`.trimEnd(),
     ].join('\n')
 
     try {

@@ -13,7 +13,7 @@ import { useToast } from '../components/Toast'
 const EMPTY = { name: '', phone: '', whatsapp: '', address: '', email: '', notes: '' }
 
 export default function Customers({
-  customers, transactions,
+  customers, transactions, storeInfo,
   addCustomer, updateCustomer, deleteCustomer,
 }) {
   const toast = useToast()
@@ -232,7 +232,7 @@ export default function Customers({
                   <div className="flex gap-1.5">
                     <WhatsAppButton
                       phone={phoneForWA}
-                      text={TEMPLATES.chat({ name: c.name })}
+                      text={TEMPLATES.chat({ name: c.name, storeName: storeInfo?.name })}
                       size="sm"
                       variant="icon"
                       tooltip="Chat Customer"
@@ -397,7 +397,7 @@ export default function Customers({
               </div>
               <div className="flex gap-2 mt-3 flex-wrap">
                 <WhatsAppButton phone={detail.whatsapp || detail.phone}
-                  text={TEMPLATES.chat({ name: detail.name })}
+                  text={TEMPLATES.chat({ name: detail.name, storeName: storeInfo?.name })}
                   variant="pill" label="Chat Customer" showCopy size="sm" />
                 {detail.totalDebt > 0 && (
                   <WhatsAppButton phone={detail.whatsapp || detail.phone}

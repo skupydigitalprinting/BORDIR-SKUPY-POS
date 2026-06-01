@@ -198,7 +198,7 @@ export function useStore() {
       for (const r of [s, a, p, t, c, d]) if (r.error) throw r.error
       if (!mounted.current) return
       setStoreInfo(settingsFromDB(s.data) || {
-        name: 'Skupy Bordir', tagline: '', address: 'Pasar Tanah Abang Blok B Los G No.160-161 Jakarta 10240', phone: '081117001155', email: '',
+        name: 'Bordir Skupy', tagline: '', address: 'Pasar Tanah Abang Blok B Lt.1 Los G No.160-161, Jakarta Pusat 10240', phone: '081117001155', email: '',
         bank: { name: 'Bank BCA', number: '2064447555', holder: 'Hardha Perdana' },
         frontLogo: '', invoiceLogo: '', taxRate: 0,
       })

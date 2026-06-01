@@ -329,7 +329,7 @@ export default function Piutang({
                     )}
                     <WhatsAppButton
                       phone={phoneForWA}
-                      text={TEMPLATES.chat({ name: d.customer.name })}
+                      text={TEMPLATES.chat({ name: d.customer.name, storeName: storeInfo?.name })}
                       size="sm" variant="icon" tooltip="Chat Customer"
                     />
                     <button onClick={() => openHistory(d)}

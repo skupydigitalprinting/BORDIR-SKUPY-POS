@@ -252,7 +252,7 @@ export default function Settings({
                     <Input label="Nama Bank" value={tokoForm.bankName}
                       onChange={e => setTokoForm(p => ({ ...p, bankName: e.target.value }))} placeholder="Bank BCA" />
                     <Input label="No Rekening" value={tokoForm.bankNumber}
-                      onChange={e => setTokoForm(p => ({ ...p, bankNumber: e.target.value }))} placeholder="2065033222" />
+                      onChange={e => setTokoForm(p => ({ ...p, bankNumber: e.target.value }))} placeholder="2064447555" />
                   </div>
                   <Input label="Atas Nama" value={tokoForm.bankHolder}
                     onChange={e => setTokoForm(p => ({ ...p, bankHolder: e.target.value }))} placeholder="Nama pemilik rekening" />

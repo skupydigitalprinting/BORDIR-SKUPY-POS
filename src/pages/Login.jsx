@@ -162,22 +162,6 @@ export default function Login({ login, storeInfo, busy }) {
               )}
             </button>
           </form>
-
-          {/* Hint */}
-          <div
-            className="mt-5 p-3 rounded-xl text-xs"
-            style={{
-              background: 'rgba(139,92,246,0.06)',
-              border: '1px solid rgba(139,92,246,0.15)',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <div className="font-semibold mb-1" style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}>
-              ℹ️ Default Login
-            </div>
-            <div>Username: <strong style={{ color: 'var(--text-secondary)' }}>admin</strong></div>
-            <div>Password: <strong style={{ color: 'var(--text-secondary)' }}>admin</strong></div>
-          </div>
         </div>
 
         {/* Footer */}

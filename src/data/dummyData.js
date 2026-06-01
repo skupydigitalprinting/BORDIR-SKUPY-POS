@@ -300,11 +300,11 @@ export const DEFAULT_TRANSACTIONS = [
 ]
 
 export const STORE_INFO = {
-  name: 'Skupy Bordir',
+  name: 'Bordir Skupy',
   tagline: 'Cetak Impian, Wujudkan Karya',
-  address: 'Pasar Tanah Abang Blok B Los G No.160-161 Jakarta 10240',
+  address: 'Pasar Tanah Abang Blok B Lt.1 Los G No.160-161, Jakarta Pusat 10240',
   phone: '081117001155',
-  email: 'hello@skupybordir.com',
+  email: '',
   bank: {
     name: 'Bank BCA',
     holder: 'Hardha Perdana',
