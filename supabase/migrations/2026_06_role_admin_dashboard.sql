@@ -7,9 +7,9 @@
 -- Cara pakai : Tempel di Supabase SQL Editor → Run. Idempotent.
 -- =====================================================================
 
--- 1) admins.role — pastikan ada + value valid: owner | admin | cashier
+-- 1) admins.role — pastikan ada + value valid: owner | admin | staff
 ALTER TABLE public.admins
-  ADD COLUMN IF NOT EXISTS role text DEFAULT 'cashier';
+  ADD COLUMN IF NOT EXISTS role text DEFAULT 'staff';
 
 -- Backfill: kalau row pertama belum punya role, jadikan owner
 UPDATE public.admins
@@ -17,12 +17,18 @@ UPDATE public.admins
  WHERE id = (SELECT id FROM public.admins ORDER BY created_at ASC LIMIT 1)
    AND (role IS NULL OR role = '');
 
-UPDATE public.admins SET role = 'cashier' WHERE role IS NULL;
+-- Normalisasi data lama agar konsisten dengan aplikasi:
+--   'cashier' (legacy) → 'staff'
+UPDATE public.admins SET role = 'staff' WHERE role = 'cashier';
+--   nilai kosong / tidak dikenal → 'staff' (mencegah pelanggaran constraint)
+UPDATE public.admins
+   SET role = 'staff'
+ WHERE role IS NULL OR role NOT IN ('owner', 'admin', 'staff');
 
 ALTER TABLE public.admins DROP CONSTRAINT IF EXISTS admins_role_check;
 ALTER TABLE public.admins
   ADD CONSTRAINT admins_role_check
-  CHECK (role IN ('owner', 'admin', 'cashier'));
+  CHECK (role IN ('owner', 'admin', 'staff'));
 
 -- 2) transactions — pastikan cashier_id, cashier (name), cashier_role ada
 ALTER TABLE public.transactions

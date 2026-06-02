@@ -583,7 +583,7 @@ export function useStore() {
     try {
       const cashier = currentUser?.name || currentUser?.username || ''
       const cashierId = currentUser?.id || null
-      const cashierRole = currentUser?.role || 'cashier'
+      const cashierRole = currentUser?.role || 'staff'
       const nowIso = new Date().toISOString()
       const statusHistory = [{
         order_status: trx.orderStatus || 'menunggu',

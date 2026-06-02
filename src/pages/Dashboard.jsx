@@ -186,7 +186,7 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
       return {
         id: admin.id,
         name: admin.name || admin.username || '—',
-        role: admin.role || 'cashier',
+        role: admin.role || 'staff',
         trxCount: own.length,
         totalOmzet,
         omzetToday,
