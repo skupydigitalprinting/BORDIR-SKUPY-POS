@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react'
 import {
-  Plus, Search, Edit2, Trash2, Package, X, ImagePlus,
+  Plus, Search, Edit2, Trash2, Package, X, ImagePlus, Settings2,
 } from 'lucide-react'
-import { CATEGORIES } from '../data/dummyData'
-import { formatRupiah, toBase64 } from '../utils/helpers'
-import { Input, Select, Textarea, Button, Badge, ProductImage, EmptyState } from '../components/ui'
+import { formatRupiah, compressImage } from '../utils/helpers'
+import { Input, Textarea, Button, Badge, ProductImage, EmptyState } from '../components/ui'
 import Modal from '../components/Modal'
+import CategoryManager from '../components/CategoryManager'
+import { useCategories, ALL_CATEGORY } from '../hooks/useCategories'
 
 const EMPTY_FORM = {
   name: '', category: 'jersey', price: '', modal: '',
@@ -24,9 +25,15 @@ const CAT_COLOR = {
   kaos: 'green', hoodie: 'accent', banner: 'red',
 }
 
-export default function Produk({ products, addProduct, updateProduct, deleteProduct, busy }) {
+export default function Produk({ products, currentUser, addProduct, updateProduct, deleteProduct, busy }) {
+  // Harga modal (cost) hanya boleh dilihat & diubah oleh Owner.
+  const isOwner = currentUser?.role === 'owner'
+  const { categories, addCategory, updateCategory, deleteCategory } = useCategories()
+  const filterCats = [ALL_CATEGORY, ...categories]
+
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('all')
+  const [catManagerOpen, setCatManagerOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -48,7 +55,7 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
 
   const openAdd = () => {
     setEditId(null)
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, category: categories[0]?.id || EMPTY_FORM.category })
     setImagePreview('')
     setErrors({})
     setModalOpen(true)
@@ -77,7 +84,8 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
       alert('Ukuran maksimal 4MB')
       return
     }
-    const b64 = await toBase64(file)
+    // Kompres dulu supaya ukuran kecil → simpan ke database cepat.
+    const b64 = await compressImage(file, { maxSize: 800, quality: 0.72 })
     setImagePreview(b64)
     setForm((prev) => ({ ...prev, image: b64 }))
   }
@@ -130,7 +138,7 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
     }
   }
 
-  const catLabels = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]))
+  const catLabels = Object.fromEntries(filterCats.map((c) => [c.id, c]))
   const margin = (p) =>
     p.modal > 0 && p.price > 0 ? Math.round(((p.price - p.modal) / p.price) * 100) : 0
 
@@ -173,7 +181,7 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            {CATEGORIES.map((c) => (
+            {filterCats.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setFilterCat(c.id)}
@@ -247,7 +255,7 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
                       style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}>
                       {formatRupiah(p.price)}
                     </span>
-                    {margin(p) > 0 && (
+                    {isOwner && margin(p) > 0 && (
                       <span className="text-xs px-2 py-0.5 rounded-lg font-semibold"
                         style={{
                           background: 'rgba(16,217,138,0.1)',
@@ -261,7 +269,7 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
                   </div>
                   <div className="flex justify-between text-xs mb-3"
                     style={{ color: 'var(--text-muted)' }}>
-                    <span>Modal: {formatRupiah(p.modal)}</span>
+                    {isOwner && <span>Modal: {formatRupiah(p.modal)}</span>}
                     <span>
                       Satuan: <strong style={{ color: 'var(--text-secondary)' }}>
                         {p.unit === 'meter' ? 'Meter' : p.unit === 'yard' ? 'Yard' : 'PCS'}
@@ -395,20 +403,41 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
             <p className="text-xs -mt-3" style={{ color: 'var(--red)' }}>{errors.name}</p>
           )}
 
-          <Select
-            label="Kategori"
-            required
-            value={form.category}
-            onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-          >
-            {CATEGORIES.filter((c) => c.id !== 'all').map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.icon} {c.label}
-              </option>
-            ))}
-          </Select>
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold"
+                style={{ color: 'var(--text-secondary)', fontFamily: 'Syne', letterSpacing: '0.02em' }}>
+                Kategori <span style={{ color: 'var(--red)' }}>*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setCatManagerOpen(true)}
+                className="flex items-center gap-1 text-xs font-semibold btn-press"
+                style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}
+              >
+                <Settings2 size={12} /> Kelola Kategori
+              </button>
+            </div>
+            <select
+              value={form.category}
+              onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+              className="w-full px-3 py-2.5 rounded-xl text-sm transition-all"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
+                fontFamily: 'DM Sans',
+              }}
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon} {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={isOwner ? 'grid grid-cols-2 gap-3' : ''}>
             <div>
               <Input
                 label="Harga Jual"
@@ -423,16 +452,19 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
                 <p className="text-xs mt-1" style={{ color: 'var(--red)' }}>{errors.price}</p>
               )}
             </div>
-            <div>
-              <Input
-                label="Harga Modal"
-                type="number"
-                value={form.modal}
-                onChange={(e) => setForm((p) => ({ ...p, modal: e.target.value }))}
-                placeholder="0"
-                prefix="Rp"
-              />
-            </div>
+            {/* Harga Modal — OWNER ONLY */}
+            {isOwner && (
+              <div>
+                <Input
+                  label="Harga Modal"
+                  type="number"
+                  value={form.modal}
+                  onChange={(e) => setForm((p) => ({ ...p, modal: e.target.value }))}
+                  placeholder="0"
+                  prefix="Rp"
+                />
+              </div>
+            )}
           </div>
 
           {/* Unit/Satuan selector */}
@@ -543,6 +575,16 @@ export default function Produk({ products, addProduct, updateProduct, deleteProd
           </div>
         </div>
       </Modal>
+
+      {/* Kelola Kategori */}
+      <CategoryManager
+        open={catManagerOpen}
+        onClose={() => setCatManagerOpen(false)}
+        categories={categories}
+        addCategory={addCategory}
+        updateCategory={updateCategory}
+        deleteCategory={deleteCategory}
+      />
     </div>
   )
 }

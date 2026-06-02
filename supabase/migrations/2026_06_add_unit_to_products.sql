@@ -1,5 +1,5 @@
 -- =====================================================================
--- Bordir Skupy POS — Migration: Tambahkan kolom `unit` ke tabel products
+-- Skupy POS — Migration: Tambahkan kolom `unit` ke tabel products
 -- =====================================================================
 -- Tujuan : Memperbaiki error
 --          "Could not find the 'unit' column of 'products' in the schema cache"
@@ -64,5 +64,5 @@ CREATE INDEX IF NOT EXISTS idx_products_unit ON public.products (unit);
 -- =====================================================================
 NOTIFY pgrst, 'reload schema';
 
--- Selesai. Coba buka kembali aplikasi Bordir Skupy POS — form Tambah/Edit Produk
+-- Selesai. Coba buka kembali aplikasi Skupy POS — form Tambah/Edit Produk
 -- dan keranjang kasir sekarang bisa menyimpan unit (PCS / Meter / Yard).

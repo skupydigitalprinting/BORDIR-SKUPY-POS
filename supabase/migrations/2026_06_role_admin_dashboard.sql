@@ -1,5 +1,5 @@
 -- =====================================================================
--- Bordir Skupy POS — Migration: Role Admin + Dashboard per-Admin
+-- Skupy POS — Migration: Role Admin + Dashboard per-Admin
 -- =====================================================================
 -- Tujuan : Menambahkan kolom yang dibutuhkan untuk fitur role-based
 --          dashboard dan filter per-admin.

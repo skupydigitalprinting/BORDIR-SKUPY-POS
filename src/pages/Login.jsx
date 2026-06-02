@@ -58,7 +58,7 @@ export default function Login({ login, storeInfo, busy }) {
               className="font-bold text-2xl mt-4 text-center"
               style={{ fontFamily: 'Syne', color: 'var(--text-primary)' }}
             >
-              {storeInfo?.name || 'Bordir Skupy POS'}
+              {storeInfo?.name || 'Bordir Skupy'}
             </h1>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
               {storeInfo?.tagline || 'Selamat datang kembali'}
@@ -166,7 +166,7 @@ export default function Login({ login, storeInfo, busy }) {
 
         {/* Footer */}
         <div className="text-center mt-5 text-xs" style={{ color: 'var(--text-muted)' }}>
-          © {new Date().getFullYear()} {storeInfo?.name || 'Bordir Skupy POS'} · All rights reserved
+          © {new Date().getFullYear()} {storeInfo?.name || 'Bordir Skupy'} · All rights reserved
         </div>
       </div>
     </div>

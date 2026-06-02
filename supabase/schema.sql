@@ -1,5 +1,5 @@
 -- =============================================================
--- Bordir Skupy POS — Supabase schema (Enterprise edition, fully idempotent)
+-- Skupy POS — Supabase schema (Enterprise edition, fully idempotent)
 -- Run in Supabase Dashboard → SQL Editor → New query → Run
 --
 -- SAFE TO RE-RUN: every statement is wrapped with IF NOT EXISTS,

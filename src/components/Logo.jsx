@@ -1,7 +1,7 @@
 import React from 'react'
 
 /**
- * Skupy Bordir Logo — inline SVG (yellow wordmark on dark) with optional
+ * Bordir Skupy Logo — inline SVG (yellow wordmark on dark) with optional
  * custom image override.
  *
  * Props:

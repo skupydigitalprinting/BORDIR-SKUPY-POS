@@ -1,4 +1,4 @@
-# 🖨️ Bordir Skupy POS — Enterprise Printing POS
+# 🖨️ Skupy POS — Enterprise Printing POS
 
 Aplikasi kasir (POS) modern premium untuk usaha printing — luxury dark UI, glassmorphism, **fully responsive (desktop + iPad + iPhone)**, backed by Supabase.
 
@@ -77,7 +77,7 @@ npm run dev
 - Grafik penjualan 7 hari (area + bar chart)
 - Distribusi kategori (pie chart)
 - Produk terlaris + transaksi terbaru
-- Banner welcome dengan logo Bordir
+- Banner welcome dengan logo Skupy
 
 ### Kasir (POS)
 - 3-column: sidebar – produk – cart
@@ -105,7 +105,7 @@ npm run dev
 - Detail order modal + invoice
 
 ### Invoice (Modern, A4)
-- Logo Bordir / custom logo dari Supabase Storage
+- Logo Skupy / custom logo dari Supabase Storage
 - Status badge berwarna
 - Kartu From / To / Detail
 - Tabel item premium

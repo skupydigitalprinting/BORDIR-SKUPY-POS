@@ -1,5 +1,5 @@
 -- =====================================================================
--- Bordir Skupy POS — Migration: Anti-Timeout & Index Tambahan
+-- Skupy POS — Migration: Anti-Timeout & Index Tambahan
 -- =====================================================================
 -- Tujuan : Memperbaiki error "canceling statement due to statement timeout"
 --          yang muncul saat dashboard initial load + saat sinkronisasi

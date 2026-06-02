@@ -5,7 +5,7 @@ import { STORE_INFO as DEFAULT_STORE } from '../data/dummyData'
 // Session persistence — keep user logged in across browser refresh.
 // Uses localStorage to remember the admin id; on init, we re-fetch from
 // Supabase to validate the session is still valid (admin still exists).
-const SESSION_KEY = 'bordir_session_v2'
+const SESSION_KEY = 'skupy_session_v2'
 
 function loadSession() {
   try {
@@ -290,7 +290,7 @@ export function useStore() {
       timer = setTimeout(flush, 500)  // 500ms debounce window
     }
 
-    const channel = supabase.channel('bordir-skupy-realtime')
+    const channel = supabase.channel('skupy-pos-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' },
         () => schedule('transactions'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'debts' },
@@ -455,7 +455,7 @@ export function useStore() {
     // Fallback: DB may be missing `unit` column (migration not yet run).
     if (e && isSchemaCacheError(e, 'unit')) {
       // eslint-disable-next-line no-console
-      console.warn('[Bordir Skupy POS] DB belum punya kolom products.unit — produk akan disimpan tanpa unit. Jalankan migrasi supabase/migrations/2026_06_add_unit_to_products.sql.')
+      console.warn('[Bordir Skupy] DB belum punya kolom products.unit — produk akan disimpan tanpa unit. Jalankan migrasi supabase/migrations/2026_06_add_unit_to_products.sql.')
       const retry = await supabase
         .from('products').insert(omit(payload, ['unit'])).select().single()
       row = retry.data; e = retry.error
@@ -471,7 +471,7 @@ export function useStore() {
       .from('products').update(payload).eq('id', id).select().single()
     if (e && isSchemaCacheError(e, 'unit')) {
       // eslint-disable-next-line no-console
-      console.warn('[Bordir Skupy POS] DB belum punya kolom products.unit — produk akan disimpan tanpa unit. Jalankan migrasi supabase/migrations/2026_06_add_unit_to_products.sql.')
+      console.warn('[Bordir Skupy] DB belum punya kolom products.unit — produk akan disimpan tanpa unit. Jalankan migrasi supabase/migrations/2026_06_add_unit_to_products.sql.')
       const retry = await supabase
         .from('products').update(omit(payload, ['unit'])).eq('id', id).select().single()
       row = retry.data; e = retry.error

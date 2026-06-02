@@ -1,5 +1,5 @@
 -- =====================================================================
--- Bordir Skupy POS — Migration: Debt MIRROR Transactions
+-- Skupy POS — Migration: Debt MIRROR Transactions
 -- =====================================================================
 -- Tujuan : Memperbaiki bug "pembayaran cicilan terpotong dobel".
 --
