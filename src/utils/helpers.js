@@ -265,6 +265,17 @@ export function canViewDashboard(role) {
   return role === 'owner' || role === 'admin'
 }
 
+// Role yang boleh membuka modul Pengeluaran (input + daftar pengeluaran).
+// Owner & Staff Admin boleh; Staff Kasir tidak.
+export function canViewExpenses(role) {
+  return role === 'owner' || role === 'admin'
+}
+
+// Hanya OWNER yang boleh melihat angka laba/rugi & keuntungan usaha.
+export function canViewProfit(role) {
+  return role === 'owner'
+}
+
 // ---------- UNIT (PCS / Meter / Yard) ----------
 
 export const UNIT_OPTIONS = [

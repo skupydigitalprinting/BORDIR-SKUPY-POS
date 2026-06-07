@@ -157,6 +157,29 @@ const debtFromDB = (r) => ({
   updatedAt: r.updated_at,
 })
 
+const expenseFromDB = (r) => ({
+  id: r.id,
+  date: r.date,
+  name: r.name || '',
+  amount: +r.amount || 0,
+  category: r.category || '',
+  notes: r.notes || '',
+  paymentMethod: r.payment_method || 'cash',
+  cashierId: r.cashier_id || null,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+})
+
+const expenseToDB = (e) => ({
+  date: e.date || new Date().toISOString().slice(0, 10),
+  name: (e.name || '').trim(),
+  amount: Number(e.amount) || 0,
+  category: e.category || '',
+  notes: e.notes || '',
+  payment_method: e.paymentMethod || 'cash',
+  cashier_id: e.cashierId || null,
+})
+
 // ---------- Hook ----------
 
 export function useStore() {
@@ -170,6 +193,7 @@ export function useStore() {
   const [customers, setCustomers] = useState([])
   const [debts, setDebts] = useState([])
   const [debtPayments, setDebtPayments] = useState([])
+  const [expenses, setExpenses] = useState([])
   const [currentUser, setCurrentUser] = useState(() => loadSession())
   const mounted = useRef(true)
 
@@ -203,7 +227,7 @@ export function useStore() {
   const refreshAll = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [s, a, p, t, c, d, dp] = await Promise.all([
+      const [s, a, p, t, c, d, dp, ex] = await Promise.all([
         supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('admins').select('*').order('created_at', { ascending: true }),
         // PENTING: jangan ambil kolom `image` di sini. Gambar produk lama
@@ -217,6 +241,8 @@ export function useStore() {
         supabase.from('debts').select('*').order('created_at', { ascending: false }).limit(DEBT_LIMIT),
         // Uang masuk (cicilan) — untuk dashboard owner "Total Uang Masuk".
         supabase.from('debt_payments').select('id, debt_id, invoice_no, amount, payment_method, paid_at, cashier_id').order('paid_at', { ascending: false }).limit(2000),
+        // Pengeluaran toko — untuk modul Pengeluaran + laba-rugi dashboard.
+        supabase.from('expenses').select('*').order('date', { ascending: false }).limit(2000),
       ])
       for (const r of [s, a, p, t, c, d]) if (r.error) throw r.error
       if (!mounted.current) return
@@ -238,6 +264,8 @@ export function useStore() {
       setDebts((d.data || []).map(debtFromDB))
       // debt_payments dipakai dashboard owner; kalau query gagal, biarkan kosong.
       if (!dp.error) setDebtPayments(dp.data || [])
+      // expenses — kalau tabel belum dibuat (migrasi belum dijalankan), biarkan kosong.
+      if (!ex.error) setExpenses((ex.data || []).map(expenseFromDB))
 
       // NOTE: Legacy "auto-fix stale=lunas" sync DIHAPUS karena bisa
       // mem-issue UPDATE bulk ke ratusan baris saat startup → potensi
@@ -291,6 +319,14 @@ export function useStore() {
     if (!e && mounted.current) setTransactions((data || []).map(trxFromDB))
   }, [])
 
+  const refreshExpenses = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from('expenses').select('*')
+      .order('date', { ascending: false })
+      .limit(2000)
+    if (!e && mounted.current) setExpenses((data || []).map(expenseFromDB))
+  }, [])
+
   // ─── Realtime subscriptions ───────────────────────────────────────
   // Satu channel, satu subscription. Setiap perubahan dipush ke handler
   // yang DI-DEBOUNCE: kalau payDebt mengupdate 4 tabel dalam 100ms, kita
@@ -310,6 +346,7 @@ export function useStore() {
       if (tables.includes('debts'))         refreshDebts()
       if (tables.includes('customers'))     refreshCustomers()
       if (tables.includes('debt_payments')) refreshDebtPayments()
+      if (tables.includes('expenses'))      refreshExpenses()
       if (tables.includes('products')) {
         // Kolom ringan dulu (anti-timeout), lalu hydrate gambar di belakang.
         supabase.from('products').select(PRODUCT_LIGHT_COLS)
@@ -339,6 +376,8 @@ export function useStore() {
         () => schedule('customers'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' },
         () => schedule('products'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' },
+        () => schedule('expenses'))
       .subscribe()
 
     return () => {
@@ -459,6 +498,33 @@ export function useStore() {
     const { error: e } = await supabase.from('customers').delete().eq('id', id)
     if (e) return { ok: false, error: e.message }
     if (mounted.current) setCustomers(prev => prev.filter(c => c.id !== id))
+    return { ok: true }
+  }), [wrap])
+
+  // ---------- EXPENSES (Pengeluaran) ----------
+  const addExpense = useCallback(async (data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama pengeluaran wajib diisi' }
+    if (!(Number(data.amount) > 0)) return { ok: false, error: 'Nominal harus lebih dari 0' }
+    const payload = { ...expenseToDB(data), cashier_id: currentUser?.id || null }
+    const { data: row, error: e } = await supabase.from('expenses').insert(payload).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setExpenses(prev => [expenseFromDB(row), ...prev])
+    return { ok: true, data: expenseFromDB(row) }
+  }), [wrap, currentUser])
+
+  const updateExpense = useCallback(async (id, data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama pengeluaran wajib diisi' }
+    if (!(Number(data.amount) > 0)) return { ok: false, error: 'Nominal harus lebih dari 0' }
+    const { data: row, error: e } = await supabase.from('expenses').update(expenseToDB(data)).eq('id', id).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setExpenses(prev => prev.map(x => x.id === id ? expenseFromDB(row) : x))
+    return { ok: true }
+  }), [wrap])
+
+  const deleteExpense = useCallback(async (id) => wrap(async () => {
+    const { error: e } = await supabase.from('expenses').delete().eq('id', id)
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setExpenses(prev => prev.filter(x => x.id !== id))
     return { ok: true }
   }), [wrap])
 
@@ -1388,6 +1454,17 @@ export function useStore() {
     }))
     const categoryData = Object.entries(categoryRevenue).map(([name, value]) => ({ name, value }))
 
+    // Expense stats (pengeluaran)
+    const inRange = (val, start) => { const dt = new Date(val); return start ? dt >= start : true }
+    const totalExpenses = expenses.reduce((s, e) => s + (+e.amount || 0), 0)
+    const todayExpenses = expenses.filter(e => new Date(e.date).toDateString() === today)
+      .reduce((s, e) => s + (+e.amount || 0), 0)
+    const monthExpenses = expenses.filter(e => inRange(e.date, monthStart))
+      .reduce((s, e) => s + (+e.amount || 0), 0)
+    // Laba bersih = total penjualan (omzet) − total pengeluaran
+    const labaBersih = totalOmzet - totalExpenses
+    const monthLaba = monthOmzet - monthExpenses
+
     // Customer + debt stats
     const activeDebts = debts.filter(d => d.status === 'aktif')
     const totalActiveDebt = activeDebts.reduce((s, d) => s + d.remaining, 0)
@@ -1429,14 +1506,17 @@ export function useStore() {
       totalTransactions: transactions.length,
       totalActiveDebt, totalPaidDebt, activeDebtsCount: activeDebts.length,
       topDebtors, topCustomers,
+      totalExpenses, todayExpenses, monthExpenses,
+      labaBersih, monthLaba,
     }
-  }, [transactions, products, customers, debts])
+  }, [transactions, products, customers, debts, expenses])
 
   return {
     loading, busy, error,
     products, transactions, storeInfo, stats,
-    admins, currentUser, customers, debts, debtPayments,
-    refreshAll, refreshCustomers, refreshDebts, refreshTransactions, refreshDebtPayments,
+    admins, currentUser, customers, debts, debtPayments, expenses,
+    refreshAll, refreshCustomers, refreshDebts, refreshTransactions, refreshDebtPayments, refreshExpenses,
+    addExpense, updateExpense, deleteExpense,
     syncDebtPaymentStatus, recalculateCustomerSummary, processDebtPayment,
     addProduct, updateProduct, deleteProduct,
     addTransaction, updateTransactionStatus, updateTransactionPayment, deleteTransaction, editTransaction,

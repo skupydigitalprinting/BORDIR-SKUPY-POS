@@ -2,10 +2,10 @@ import React from 'react'
 import {
   LayoutDashboard, ShoppingCart, Package, ClipboardList,
   ChevronRight, X, Settings as SettingsIcon, Crown,
-  Users, Wallet, LogOut,
+  Users, Wallet, LogOut, TrendingDown,
 } from 'lucide-react'
 import Logo from './Logo'
-import { canViewDashboard, roleLabel } from '../utils/helpers'
+import { canViewDashboard, canViewExpenses, roleLabel } from '../utils/helpers'
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, hint: 'Statistik & ringkasan' },
@@ -14,6 +14,7 @@ const NAV = [
   { id: 'order', label: 'Order', icon: ClipboardList, hint: 'Daftar pesanan' },
   { id: 'customers', label: 'Customers', icon: Users, hint: 'Database pelanggan' },
   { id: 'piutang', label: 'Piutang', icon: Wallet, hint: 'Hutang & cicilan' },
+  { id: 'pengeluaran', label: 'Pengeluaran', icon: TrendingDown, hint: 'Catatan pengeluaran' },
 ]
 
 export default function Sidebar({
@@ -28,6 +29,12 @@ export default function Sidebar({
 
   const isOwner = currentUser?.role === 'owner'
   const showDashboard = canViewDashboard(currentUser?.role)
+  const showExpenses = canViewExpenses(currentUser?.role)
+  const visibleNav = NAV.filter(({ id }) => {
+    if (id === 'dashboard') return showDashboard
+    if (id === 'pengeluaran') return showExpenses
+    return true
+  })
 
   const content = (
     <>
@@ -66,7 +73,7 @@ export default function Sidebar({
           style={{ color: 'var(--text-muted)', fontFamily: 'Syne' }}>
           Menu Utama
         </div>
-        {NAV.filter(({ id }) => showDashboard || id !== 'dashboard').map(({ id, label, icon: Icon, hint }) => {
+        {visibleNav.map(({ id, label, icon: Icon, hint }) => {
           const active = activePage === id
           return (
             <button

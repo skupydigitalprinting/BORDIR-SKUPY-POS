@@ -18,6 +18,7 @@ const Produk = lazy(() => import('./pages/Produk'))
 const Order = lazy(() => import('./pages/Order'))
 const Customers = lazy(() => import('./pages/Customers'))
 const Piutang = lazy(() => import('./pages/Piutang'))
+const Pengeluaran = lazy(() => import('./pages/Pengeluaran'))
 const Settings = lazy(() => import('./components/Settings'))
 
 function PageLoader() {
@@ -168,11 +169,13 @@ function AppShell() {
   const isOwner = role === 'owner'
   // Owner & Staff Admin boleh melihat dashboard; Staff Kasir tidak.
   const canSeeDashboard = role === 'owner' || role === 'admin'
+  // Modul Pengeluaran: hanya Owner & Staff Admin (Staff Kasir tidak).
+  const canSeeExpenses = role === 'owner' || role === 'admin'
   const [activePage, setActivePageRaw] = useState(canSeeDashboard ? 'dashboard' : 'kasir')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // Wrap setActivePage: kalau Staff Kasir mencoba membuka 'dashboard',
+  // Wrap setActivePage: kalau Staff Kasir mencoba membuka 'dashboard'/'pengeluaran',
   // tampilkan toast dan redirect ke 'kasir'. Tidak ada cara akses tersembunyi.
   const setActivePage = (next) => {
     if (next === 'dashboard' && !canSeeDashboard) {
@@ -180,16 +183,24 @@ function AppShell() {
       setActivePageRaw('kasir')
       return
     }
+    if (next === 'pengeluaran' && !canSeeExpenses) {
+      toast.warning('Pengeluaran hanya dapat diakses oleh Owner & Staff Admin')
+      setActivePageRaw('kasir')
+      return
+    }
     setActivePageRaw(next)
   }
 
   // Saat role berubah (mis. user logout lalu login lagi sebagai Staff Kasir),
-  // pastikan tidak nyangkut di Dashboard.
+  // pastikan tidak nyangkut di halaman terlarang.
   useEffect(() => {
     if (!canSeeDashboard && activePage === 'dashboard') {
       setActivePageRaw('kasir')
     }
-  }, [canSeeDashboard, activePage])
+    if (!canSeeExpenses && activePage === 'pengeluaran') {
+      setActivePageRaw('kasir')
+    }
+  }, [canSeeDashboard, canSeeExpenses, activePage])
 
   if (store.loading) return <LoadingSplash />
   if (store.error) return <ErrorScreen error={store.error} onRetry={store.refreshAll} />
@@ -220,6 +231,7 @@ function AppShell() {
       products={store.products}
       debts={store.debts}
       debtPayments={store.debtPayments}
+      expenses={store.expenses}
       admins={store.admins}
       storeInfo={store.storeInfo}
       currentUser={store.currentUser}
@@ -276,6 +288,14 @@ function AppShell() {
       deleteDebt={store.deleteDebt}
       getDebtPayments={store.getDebtPayments}
     />,
+    pengeluaran: canSeeExpenses ? <Pengeluaran
+      expenses={store.expenses}
+      addExpense={store.addExpense}
+      updateExpense={store.updateExpense}
+      deleteExpense={store.deleteExpense}
+      currentUser={store.currentUser}
+      busy={store.busy}
+    /> : null,
   }
 
   return (

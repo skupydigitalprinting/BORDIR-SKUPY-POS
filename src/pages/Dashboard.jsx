@@ -103,7 +103,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function Dashboard({ stats, transactions, products = [], debts = [], debtPayments = [], admins = [], setActivePage, storeInfo, currentUser, deleteTransaction, editTransaction, editDebtPayment, deleteDebtPayment }) {
+export default function Dashboard({ stats, transactions, products = [], debts = [], debtPayments = [], expenses = [], admins = [], setActivePage, storeInfo, currentUser, deleteTransaction, editTransaction, editDebtPayment, deleteDebtPayment }) {
   const isOwner = currentUser?.role === 'owner'
 
   // ─── Owner-only: Total Uang Masuk (uang yang BENAR-BENAR diterima) ───
@@ -133,35 +133,29 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
   }, [transactions, debtPayments])
 
   // ─── Owner-only Laba-Rugi: rentang tanggal terpisah ───
-  // Laba = total penjualan (transaksi lunas) − modal barang (qty × modal produk).
+  // Laba bersih = TOTAL PENJUALAN − TOTAL PENGELUARAN (bukan dari modal produk).
+  // Realtime: ikut berubah saat transaksi / pengeluaran di-update.
   const [labaFrom, setLabaFrom] = useState('')
   const [labaTo, setLabaTo] = useState('')
 
-  const modalById = useMemo(() => {
-    const m = {}
-    ;(products || []).forEach(p => { m[p.id] = Number(p.modal) || 0 })
-    return m
-  }, [products])
-
   const labaRugi = useMemo(() => {
-    let list = (transactions || []).filter(t => t.status === 'lunas')
-    if (labaFrom) {
-      const f = new Date(labaFrom + 'T00:00:00').getTime()
-      list = list.filter(t => new Date(t.date).getTime() >= f)
+    // Proteksi data: hanya OWNER yang boleh menghitung laba/rugi.
+    if (!isOwner) return { revenue: 0, expense: 0, profit: 0, count: 0 }
+    const fromT = labaFrom ? new Date(labaFrom + 'T00:00:00').getTime() : null
+    const toT = labaTo ? new Date(labaTo + 'T23:59:59').getTime() : null
+    const inRange = (val) => {
+      const t = new Date(val).getTime()
+      if (fromT != null && t < fromT) return false
+      if (toT != null && t > toT) return false
+      return true
     }
-    if (labaTo) {
-      const tt = new Date(labaTo + 'T23:59:59').getTime()
-      list = list.filter(t => new Date(t.date).getTime() <= tt)
-    }
-    let revenue = 0, modal = 0
-    list.forEach(t => {
-      revenue += Number(t.total) || 0
-      ;(t.items || []).forEach(i => {
-        modal += (Number(i.qty) || 0) * (modalById[i.productId] || 0)
-      })
-    })
-    return { revenue, modal, profit: revenue - modal, count: list.length }
-  }, [transactions, modalById, labaFrom, labaTo])
+    // Total penjualan = seluruh transaksi (kecuali yang dibatalkan).
+    const sales = (transactions || []).filter(t => (t.orderStatus || '') !== 'dibatalkan' && inRange(t.date))
+    const revenue = sales.reduce((s, t) => s + (Number(t.total) || 0), 0)
+    // Total pengeluaran dalam rentang.
+    const expense = (expenses || []).filter(e => inRange(e.date)).reduce((s, e) => s + (Number(e.amount) || 0), 0)
+    return { revenue, expense, profit: revenue - expense, count: sales.length }
+  }, [transactions, expenses, labaFrom, labaTo, isOwner])
 
   // ─── Owner-only filter: admin dropdown + date range ───
   // - 'all'      → semua admin gabungan
@@ -329,13 +323,13 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
         // total cocok PERSIS dengan card Piutang Aktif (piutangData.value)
         return { title: 'Piutang Aktif', rows, total: piutangData.value, manage: true }
       }
-      case 'penjualan': case 'laba': case 'modal': {
-        let base = validTx.filter(t => t.status === 'lunas')
+      case 'penjualan': case 'laba': {
+        let base = validTx.filter(t => (t.orderStatus || '') !== 'dibatalkan')
         if (labaFrom) { const f = new Date(labaFrom + 'T00:00:00').getTime(); base = base.filter(t => new Date(t.date).getTime() >= f) }
         if (labaTo) { const tt = new Date(labaTo + 'T23:59:59').getTime(); base = base.filter(t => new Date(t.date).getTime() <= tt) }
         const rows = base.map(txRow)
-        const titles = { penjualan: 'Total Penjualan', laba: 'Laba Bersih', modal: 'Modal Barang' }
-        const total = key === 'penjualan' ? labaRugi.revenue : key === 'modal' ? labaRugi.modal : labaRugi.profit
+        const titles = { penjualan: 'Total Penjualan', laba: 'Laba Bersih' }
+        const total = key === 'penjualan' ? labaRugi.revenue : labaRugi.profit
         return { title: titles[key], rows, total }
       }
       case 'pelanggan': {
@@ -627,7 +621,7 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
           </div>
         )}
 
-        {/* Laba-Rugi — OWNER ONLY (penjualan − modal barang, rentang tanggal sendiri) */}
+        {/* Laba-Rugi — OWNER ONLY (penjualan − pengeluaran, rentang tanggal sendiri) */}
         {isOwner && (
           <div className="rounded-2xl p-5 mb-5 animate-slideUp relative overflow-hidden"
             style={{
@@ -694,26 +688,26 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
                   {formatRupiah(labaRugi.revenue)}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  {labaRugi.count} transaksi lunas
+                  {labaRugi.count} transaksi
                 </div>
               </div>
 
-              {/* Modal */}
-              <div onClick={() => openCard('modal')}
+              {/* Total Pengeluaran */}
+              <div onClick={() => setActivePage && setActivePage('pengeluaran')}
                 className="rounded-xl p-4 cursor-pointer hover:brightness-110 transition"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)' }}>
-                    <PackageOpen size={15} style={{ color: '#f59e0b' }} />
+                    style={{ background: 'rgba(255,77,106,0.12)', border: '1px solid rgba(255,77,106,0.3)' }}>
+                    <TrendingDown size={15} style={{ color: '#ff4d6a' }} />
                   </div>
-                  <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Modal Barang</span>
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Total Pengeluaran</span>
                 </div>
-                <div className="text-lg sm:text-xl font-bold" style={{ fontFamily: 'Syne', color: '#f59e0b' }}>
-                  {formatRupiah(labaRugi.modal)}
+                <div className="text-lg sm:text-xl font-bold" style={{ fontFamily: 'Syne', color: '#ff4d6a' }}>
+                  {formatRupiah(labaRugi.expense)}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Harga modal terjual
+                  Buka modul Pengeluaran
                 </div>
               </div>
 
@@ -749,6 +743,7 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
             </div>
 
             <p className="relative text-[11px] mt-3" style={{ color: 'var(--text-muted)' }}>
+              Laba bersih = Total Penjualan − Total Pengeluaran ·{' '}
               {(labaFrom || labaTo)
                 ? `Periode: ${labaFrom || '…'} s/d ${labaTo || '…'}`
                 : 'Periode: semua waktu (atur tanggal untuk memfilter)'}

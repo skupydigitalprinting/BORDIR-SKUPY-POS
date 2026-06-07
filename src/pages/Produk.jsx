@@ -10,7 +10,7 @@ import CategoryManager from '../components/CategoryManager'
 import { useCategories, ALL_CATEGORY } from '../hooks/useCategories'
 
 const EMPTY_FORM = {
-  name: '', category: 'jersey', price: '', modal: '',
+  name: '', category: 'jersey', price: '',
   unit: 'pcs',
   description: '', image: '',
 }
@@ -27,8 +27,6 @@ const CAT_COLOR = {
 }
 
 export default function Produk({ products, currentUser, addProduct, updateProduct, deleteProduct, busy }) {
-  // Harga modal (cost) hanya boleh dilihat & diubah oleh Owner.
-  const isOwner = currentUser?.role === 'owner'
   const { categories, addCategory, updateCategory, deleteCategory } = useCategories()
   const filterCats = [ALL_CATEGORY, ...categories]
 
@@ -78,7 +76,6 @@ export default function Produk({ products, currentUser, addProduct, updateProduc
       name: p.name,
       category: p.category,
       price: p.price,
-      modal: p.modal,
       unit: p.unit || 'pcs',
       description: p.description || '',
       image: p.image || '',
@@ -123,7 +120,6 @@ export default function Produk({ products, currentUser, addProduct, updateProduc
     const errs = {}
     if (!form.name?.trim()) errs.name = 'Nama wajib diisi'
     if (!form.price || Number(form.price) <= 0) errs.price = 'Harga harus > 0'
-    if (Number(form.modal) < 0) errs.modal = 'Modal tidak valid'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -137,7 +133,8 @@ export default function Produk({ products, currentUser, addProduct, updateProduc
         ...form,
         name: form.name.trim(),
         price: Number(form.price),
-        modal: Number(form.modal) || 0,
+        // Modal/cost tidak lagi digunakan — kolom DB tetap ada (default 0).
+        modal: 0,
         // Stok default 0 saat tambah; editing tetap pakai existing stock
         stock: editId ? (products.find(p => p.id === editId)?.stock || 0) : 0,
         unit: form.unit || 'pcs',
@@ -169,8 +166,6 @@ export default function Produk({ products, currentUser, addProduct, updateProduc
   }
 
   const catLabels = Object.fromEntries(filterCats.map((c) => [c.id, c]))
-  const margin = (p) =>
-    p.modal > 0 && p.price > 0 ? Math.round(((p.price - p.modal) / p.price) * 100) : 0
 
   return (
     <div className="flex-1 overflow-y-auto mesh-bg">
@@ -285,21 +280,9 @@ export default function Produk({ products, currentUser, addProduct, updateProduc
                       style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}>
                       {formatRupiah(p.price)}
                     </span>
-                    {isOwner && margin(p) > 0 && (
-                      <span className="text-xs px-2 py-0.5 rounded-lg font-semibold"
-                        style={{
-                          background: 'rgba(16,217,138,0.1)',
-                          color: '#10d98a',
-                          border: '1px solid rgba(16,217,138,0.2)',
-                          fontFamily: 'Syne',
-                        }}>
-                        {margin(p)}%
-                      </span>
-                    )}
                   </div>
-                  <div className="flex justify-between text-xs mb-3"
+                  <div className="flex justify-end text-xs mb-3"
                     style={{ color: 'var(--text-muted)' }}>
-                    {isOwner && <span>Modal: {formatRupiah(p.modal)}</span>}
                     <span>
                       Satuan: <strong style={{ color: 'var(--text-secondary)' }}>
                         {p.unit === 'meter' ? 'Meter' : p.unit === 'yard' ? 'Yard' : 'PCS'}
@@ -482,33 +465,18 @@ export default function Produk({ products, currentUser, addProduct, updateProduc
             </select>
           </div>
 
-          <div className={isOwner ? 'grid grid-cols-2 gap-3' : ''}>
-            <div>
-              <Input
-                label="Harga Jual"
-                required
-                type="number"
-                value={form.price}
-                onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
-                placeholder="0"
-                prefix="Rp"
-              />
-              {errors.price && (
-                <p className="text-xs mt-1" style={{ color: 'var(--red)' }}>{errors.price}</p>
-              )}
-            </div>
-            {/* Harga Modal — OWNER ONLY */}
-            {isOwner && (
-              <div>
-                <Input
-                  label="Harga Modal"
-                  type="number"
-                  value={form.modal}
-                  onChange={(e) => setForm((p) => ({ ...p, modal: e.target.value }))}
-                  placeholder="0"
-                  prefix="Rp"
-                />
-              </div>
+          <div>
+            <Input
+              label="Harga Jual"
+              required
+              type="number"
+              value={form.price}
+              onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
+              placeholder="0"
+              prefix="Rp"
+            />
+            {errors.price && (
+              <p className="text-xs mt-1" style={{ color: 'var(--red)' }}>{errors.price}</p>
             )}
           </div>
 

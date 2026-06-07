@@ -187,6 +187,24 @@ CREATE INDEX IF NOT EXISTS idx_debts_transaction_id      ON public.debts (transa
 CREATE INDEX IF NOT EXISTS idx_debts_invoice_no          ON public.debts (invoice_no);
 CREATE INDEX IF NOT EXISTS idx_transactions_invoice_no   ON public.transactions (invoice_no);
 
+-- Pengeluaran toko (expenses)
+CREATE TABLE IF NOT EXISTS public.expenses (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  date            date NOT NULL DEFAULT CURRENT_DATE,
+  name            text NOT NULL DEFAULT '',
+  amount          numeric NOT NULL DEFAULT 0,
+  category        text DEFAULT '',
+  notes           text DEFAULT '',
+  payment_method  text DEFAULT 'cash',
+  cashier_id      uuid REFERENCES public.admins(id) ON DELETE SET NULL,
+  created_at      timestamptz DEFAULT now(),
+  updated_at      timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_expenses_date       ON public.expenses (date DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON public.expenses (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_category   ON public.expenses (category);
+
 -- ---------- TRIGGERS ----------
 
 -- Auto-update updated_at on customers + debts + settings
@@ -210,6 +228,11 @@ CREATE TRIGGER debts_updated_at
 DROP TRIGGER IF EXISTS settings_updated_at ON public.settings;
 CREATE TRIGGER settings_updated_at
   BEFORE UPDATE ON public.settings
+  FOR EACH ROW EXECUTE FUNCTION public.tg_set_updated_at();
+
+DROP TRIGGER IF EXISTS expenses_updated_at ON public.expenses;
+CREATE TRIGGER expenses_updated_at
+  BEFORE UPDATE ON public.expenses
   FOR EACH ROW EXECUTE FUNCTION public.tg_set_updated_at();
 
 -- NOTE: trigger tg_apply_debt_payment SENGAJA TIDAK DIBUAT.
@@ -250,6 +273,7 @@ ALTER TABLE public.products       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.debts          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.debt_payments  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expenses       ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN CREATE POLICY "anon all settings"      ON public.settings      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all admins"        ON public.admins        FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -258,6 +282,7 @@ DO $$ BEGIN CREATE POLICY "anon all products"      ON public.products      FOR A
 DO $$ BEGIN CREATE POLICY "anon all transactions"  ON public.transactions  FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all debts"         ON public.debts         FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all debt_payments" ON public.debt_payments FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "anon all expenses"      ON public.expenses      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------- STORAGE: logos bucket ----------
 
@@ -295,7 +320,7 @@ DO $$ BEGIN CREATE POLICY "Public delete invoices" ON storage.objects FOR DELETE
 DO $$
 DECLARE
   tbl text;
-  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings'];
+  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses'];
 BEGIN
   -- Skip the whole block if the publication doesn't exist yet (non-Supabase Postgres)
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
