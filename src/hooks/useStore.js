@@ -176,7 +176,7 @@ const expenseToDB = (e) => ({
   amount: Number(e.amount) || 0,
   category: e.category || '',
   notes: e.notes || '',
-  payment_method: e.paymentMethod || 'cash',
+  payment_method: e.paymentMethod || 'transfer',
   cashier_id: e.cashierId || null,
 })
 

@@ -11,13 +11,16 @@ import { useExpenseCategories, getExpenseCatLabel } from '../hooks/useExpenseCat
 import { useToast } from '../components/Toast'
 
 const PAYMENT_OPTIONS = [
-  { id: 'cash', label: 'Cash' },
   { id: 'transfer', label: 'Transfer' },
+  { id: 'cash', label: 'Cash' },
   { id: 'qris', label: 'QRIS' },
+  { id: 'ewallet', label: 'E-Wallet' },
+  { id: 'lainnya', label: 'Lainnya' },
 ]
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
-const EMPTY = () => ({ date: todayISO(), name: '', amount: '', category: '', notes: '', paymentMethod: 'cash' })
+// Default metode pembayaran = Transfer (bukan Cash).
+const EMPTY = () => ({ date: todayISO(), name: '', amount: '', category: '', notes: '', paymentMethod: 'transfer' })
 
 export default function Pengeluaran({
   expenses = [], addExpense, updateExpense, deleteExpense, busy,
@@ -83,7 +86,7 @@ export default function Pengeluaran({
         amount,
         category: form.category || '',
         notes: form.notes.trim(),
-        paymentMethod: form.paymentMethod || 'cash',
+        paymentMethod: form.paymentMethod || 'transfer',
       }
       const res = editId ? await updateExpense(editId, data) : await addExpense(data)
       if (res.ok) {

@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS public.expenses (
   amount          numeric NOT NULL DEFAULT 0,
   category        text DEFAULT '',
   notes           text DEFAULT '',
-  payment_method  text DEFAULT 'cash',
+  payment_method  text DEFAULT 'transfer',
   cashier_id      uuid REFERENCES public.admins(id) ON DELETE SET NULL,
   created_at      timestamptz DEFAULT now(),
   updated_at      timestamptz DEFAULT now()
@@ -283,6 +283,16 @@ DO $$ BEGIN CREATE POLICY "anon all transactions"  ON public.transactions  FOR A
 DO $$ BEGIN CREATE POLICY "anon all debts"         ON public.debts         FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all debt_payments" ON public.debt_payments FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all expenses"      ON public.expenses      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ---------- GRANTS ----------
+-- RLS policy mengatur baris mana yang boleh diakses, tapi role `anon`
+-- (dipakai aplikasi via anon key) tetap butuh GRANT privilege di level
+-- tabel. Tanpa ini muncul "permission denied for table ...".
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated;
 
 -- ---------- STORAGE: logos bucket ----------
 
