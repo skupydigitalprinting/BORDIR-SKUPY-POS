@@ -196,6 +196,8 @@ CREATE TABLE IF NOT EXISTS public.expenses (
   category        text DEFAULT '',
   notes           text DEFAULT '',
   payment_method  text DEFAULT 'transfer',
+  affects_profit  boolean DEFAULT true,        -- false = tidak memotong laba (mis. bayar hutang non-operasional)
+  liability_id    uuid,                         -- link ke hutang bila ini pembayaran hutang
   cashier_id      uuid REFERENCES public.admins(id) ON DELETE SET NULL,
   created_at      timestamptz DEFAULT now(),
   updated_at      timestamptz DEFAULT now()
@@ -204,6 +206,8 @@ CREATE TABLE IF NOT EXISTS public.expenses (
 CREATE INDEX IF NOT EXISTS idx_expenses_date       ON public.expenses (date DESC);
 CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON public.expenses (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_expenses_category   ON public.expenses (category);
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS affects_profit boolean DEFAULT true;
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS liability_id uuid;
 
 -- Kategori pengeluaran (bisa dikelola dari UI). id = slug text.
 CREATE TABLE IF NOT EXISTS public.expense_categories (
@@ -221,7 +225,8 @@ INSERT INTO public.expense_categories (id, name, icon, sort) VALUES
   ('listrik',     'Listrik',     '💡', 4),
   ('sewa',        'Sewa',        '🏠', 5),
   ('transport',   'Transport',   '🚚', 6),
-  ('lain-lain',   'Lain-lain',   '📦', 7)
+  ('lain-lain',   'Lain-lain',   '📦', 7),
+  ('pembayaran-hutang', 'Pembayaran Hutang', '💳', 8)
 ON CONFLICT (id) DO NOTHING;
 
 -- Sewa dibayar dimuka (diamortisasi per bulan).
@@ -262,15 +267,16 @@ ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_method tex
 ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_value  numeric DEFAULT 0;
 ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_start  date;
 
--- Hutang usaha (supplier / bank / lain).
+-- Hutang usaha (operasional / aset / sewa / supplier / bank).
 CREATE TABLE IF NOT EXISTS public.liabilities (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name         text NOT NULL DEFAULT '',
   type         text DEFAULT 'supplier',
   amount       numeric NOT NULL DEFAULT 0,
+  paid         numeric DEFAULT 0,
   date         date DEFAULT CURRENT_DATE,
   due_date     date,
-  status       text DEFAULT 'aktif',
+  status       text DEFAULT 'aktif',          -- aktif | sebagian | lunas
   notes        text DEFAULT '',
   cashier_id   uuid REFERENCES public.admins(id) ON DELETE SET NULL,
   created_at   timestamptz DEFAULT now(),
@@ -278,6 +284,22 @@ CREATE TABLE IF NOT EXISTS public.liabilities (
 );
 CREATE INDEX IF NOT EXISTS idx_liabilities_status ON public.liabilities (status);
 CREATE INDEX IF NOT EXISTS idx_liabilities_date   ON public.liabilities (date DESC);
+ALTER TABLE public.liabilities ADD COLUMN IF NOT EXISTS paid numeric DEFAULT 0;
+
+-- Pembayaran hutang (riwayat, FIFO).
+CREATE TABLE IF NOT EXISTS public.liability_payments (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  liability_id    uuid REFERENCES public.liabilities(id) ON DELETE CASCADE,
+  payment_date    date DEFAULT CURRENT_DATE,
+  amount          numeric NOT NULL DEFAULT 0,
+  payment_method  text DEFAULT 'transfer',
+  notes           text DEFAULT '',
+  expense_id      uuid REFERENCES public.expenses(id) ON DELETE SET NULL,
+  created_by      uuid REFERENCES public.admins(id) ON DELETE SET NULL,
+  created_at      timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_liability_payments_liability ON public.liability_payments (liability_id);
+CREATE INDEX IF NOT EXISTS idx_liability_payments_date      ON public.liability_payments (payment_date DESC);
 
 -- ---------- TRIGGERS ----------
 
@@ -352,6 +374,7 @@ ALTER TABLE public.expense_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.prepaid_rent       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fixed_assets       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.liabilities        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.liability_payments ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN CREATE POLICY "anon all settings"      ON public.settings      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all admins"        ON public.admins        FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -365,6 +388,7 @@ DO $$ BEGIN CREATE POLICY "anon all expense_categories" ON public.expense_catego
 DO $$ BEGIN CREATE POLICY "anon all prepaid_rent"   ON public.prepaid_rent   FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all fixed_assets"   ON public.fixed_assets   FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all liabilities"    ON public.liabilities    FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "anon all liability_payments" ON public.liability_payments FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------- GRANTS ----------
 -- RLS policy mengatur baris mana yang boleh diakses, tapi role `anon`
@@ -412,7 +436,7 @@ DO $$ BEGIN CREATE POLICY "Public delete invoices" ON storage.objects FOR DELETE
 DO $$
 DECLARE
   tbl text;
-  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses','expense_categories','prepaid_rent','fixed_assets','liabilities'];
+  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses','expense_categories','prepaid_rent','fixed_assets','liabilities','liability_payments'];
 BEGIN
   -- Skip the whole block if the publication doesn't exist yet (non-Supabase Postgres)
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN

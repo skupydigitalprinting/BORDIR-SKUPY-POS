@@ -210,8 +210,8 @@ export default function Dashboard({ stats, transactions, products = [], customer
     // Total penjualan = seluruh transaksi (kecuali yang dibatalkan).
     const sales = (transactions || []).filter(t => (t.orderStatus || '') !== 'dibatalkan' && inRange(t.date))
     const revenue = sales.reduce((s, t) => s + (Number(t.total) || 0), 0)
-    // Pengeluaran operasional dalam rentang.
-    const expense = (expenses || []).filter(e => inRange(e.date)).reduce((s, e) => s + (Number(e.amount) || 0), 0)
+    // Pengeluaran OPERASIONAL dalam rentang (exclude pembayaran hutang non-operasional).
+    const expense = (expenses || []).filter(e => inRange(e.date) && e.affectsProfit !== false).reduce((s, e) => s + (Number(e.amount) || 0), 0)
     // Beban sewa bulanan (amortisasi) yang jatuh di rentang.
     const rent = rentAccruedInRange(prepaidRent, labaFrom, labaTo)
     return { revenue, expense, rent, profit: revenue - expense - rent, count: sales.length }
@@ -221,13 +221,16 @@ export default function Dashboard({ stats, transactions, products = [], customer
   const neraca = useMemo(() => {
     if (!isOwner) return null
     const cashIn = (transactions || []).reduce((s, t) => s + (Number(t.paid) || 0), 0)
-    const opExpenseAll = (expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)
+    // Untuk Kas: semua pengeluaran (uang benar-benar keluar, termasuk bayar hutang).
+    const cashExpenseAll = (expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)
+    // Untuk laba: hanya pengeluaran operasional (affectsProfit !== false).
+    const opExpenseAll = (expenses || []).filter(e => e.affectsProfit !== false).reduce((s, e) => s + (Number(e.amount) || 0), 0)
     const prepaidTotalPaid = (prepaidRent || []).reduce((s, r) => s + (Number(r.totalAmount) || 0), 0)
     const assetBuyTotal = (fixedAssets || []).reduce((s, a) => s + (Number(a.amount) || 0), 0)
     // Aset tetap pakai NILAI BUKU (setelah penyusutan).
     const assetBookTotal = (fixedAssets || []).reduce((s, a) => s + assetCalc(a).current, 0)
-    // Kas = uang masuk − op.exp − total sewa dibayar − pembelian aset (nilai beli).
-    const kas = cashIn - opExpenseAll - prepaidTotalPaid - assetBuyTotal
+    // Kas = uang masuk − SEMUA pengeluaran kas − total sewa dibayar − pembelian aset.
+    const kas = cashIn - cashExpenseAll - prepaidTotalPaid - assetBuyTotal
     // Persediaan = Σ(stok × harga pokok/modal).
     const persediaan = (products || []).reduce((s, p) => s + (Number(p.stock) || 0) * (Number(p.modal) || 0), 0)
     // Sewa dibayar dimuka = sisa nilai (belum diamortisasi).
@@ -243,7 +246,7 @@ export default function Dashboard({ stats, transactions, products = [], customer
     return {
       kas, persediaan, asetTetap: assetBookTotal, asetBeli: assetBuyTotal,
       sewaSisa, sewaTotal: prepaidTotalPaid, piutang, hutang, labaBersih, asetBersih,
-      salesAll, opExpenseAll, rentAccruedAll, cashIn,
+      salesAll, opExpenseAll, cashExpenseAll, rentAccruedAll, cashIn,
     }
   }, [isOwner, transactions, expenses, prepaidRent, fixedAssets, products, liabilities, stats])
 
@@ -259,7 +262,7 @@ export default function Dashboard({ stats, transactions, products = [], customer
         formula: 'Kas = Uang Masuk − Pengeluaran Operasional − Sewa Dibayar − Pembelian Aset',
         rows: [
           { label: 'Uang masuk (pembayaran)', amount: neraca.cashIn },
-          { label: 'Pengeluaran operasional', amount: -neraca.opExpenseAll },
+          { label: 'Pengeluaran (semua kas keluar)', amount: -neraca.cashExpenseAll },
           { label: 'Sewa dibayar dimuka', amount: -neraca.sewaTotal },
           { label: 'Pembelian aset tetap', amount: -neraca.asetBeli },
         ],

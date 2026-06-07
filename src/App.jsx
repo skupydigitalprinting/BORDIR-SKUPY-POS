@@ -333,9 +333,15 @@ function AppShell() {
     /> : null,
     hutang: canSeeOwnerFinance ? <Hutang
       liabilities={store.liabilities}
+      liabilityPayments={store.liabilityPayments}
+      admins={store.admins}
       addLiability={store.addLiability}
       updateLiability={store.updateLiability}
       deleteLiability={store.deleteLiability}
+      payLiability={store.payLiability}
+      payLiabilitiesFIFO={store.payLiabilitiesFIFO}
+      editLiabilityPayment={store.editLiabilityPayment}
+      deleteLiabilityPayment={store.deleteLiabilityPayment}
       busy={store.busy}
     /> : null,
   }

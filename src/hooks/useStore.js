@@ -165,6 +165,8 @@ const expenseFromDB = (r) => ({
   category: r.category || '',
   notes: r.notes || '',
   paymentMethod: r.payment_method || 'cash',
+  affectsProfit: r.affects_profit === false ? false : true,
+  liabilityId: r.liability_id || null,
   cashierId: r.cashier_id || null,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -177,6 +179,8 @@ const expenseToDB = (e) => ({
   category: e.category || '',
   notes: e.notes || '',
   payment_method: e.paymentMethod || 'transfer',
+  affects_profit: e.affectsProfit === false ? false : true,
+  liability_id: e.liabilityId || null,
   cashier_id: e.cashierId || null,
 })
 
@@ -249,17 +253,23 @@ const fixedAssetToDB = (a) => ({
 })
 
 // Hutang usaha.
-const liabilityFromDB = (r) => ({
-  id: r.id,
-  name: r.name || '',
-  type: r.type || 'supplier',
-  amount: Number(r.amount) || 0,
-  date: r.date,
-  dueDate: r.due_date,
-  status: r.status || 'aktif',
-  notes: r.notes || '',
-  createdAt: r.created_at,
-})
+const liabilityFromDB = (r) => {
+  const amount = Number(r.amount) || 0
+  const paid = Number(r.paid) || 0
+  const remaining = Math.max(0, amount - paid)
+  const status = remaining <= 0 ? 'lunas' : (paid > 0 ? 'sebagian' : 'aktif')
+  return {
+    id: r.id,
+    name: r.name || '',
+    type: r.type || 'supplier',
+    amount, paid, remaining, status,
+    date: r.date,
+    dueDate: r.due_date,
+    notes: r.notes || '',
+    cashierId: r.cashier_id || null,
+    createdAt: r.created_at,
+  }
+}
 
 const liabilityToDB = (l) => ({
   name: (l.name || '').trim(),
@@ -267,9 +277,24 @@ const liabilityToDB = (l) => ({
   amount: Number(l.amount) || 0,
   date: l.date || new Date().toISOString().slice(0, 10),
   due_date: l.dueDate || null,
-  status: l.status || 'aktif',
   notes: (l.notes || '').trim(),
 })
+
+// Pembayaran hutang.
+const liabilityPaymentFromDB = (r) => ({
+  id: r.id,
+  liabilityId: r.liability_id,
+  paymentDate: r.payment_date,
+  amount: Number(r.amount) || 0,
+  paymentMethod: r.payment_method || 'transfer',
+  notes: r.notes || '',
+  expenseId: r.expense_id || null,
+  createdBy: r.created_by || null,
+  createdAt: r.created_at,
+})
+
+// Jenis hutang yang pembayarannya MEMOTONG laba operasional.
+const liabilityAffectsProfit = (type) => (type === 'operasional')
 
 // ---------- Hook ----------
 
@@ -289,6 +314,7 @@ export function useStore() {
   const [prepaidRent, setPrepaidRent] = useState([])
   const [fixedAssets, setFixedAssets] = useState([])
   const [liabilities, setLiabilities] = useState([])
+  const [liabilityPayments, setLiabilityPayments] = useState([])
   const [currentUser, setCurrentUser] = useState(() => loadSession())
   const mounted = useRef(true)
 
@@ -322,7 +348,7 @@ export function useStore() {
   const refreshAll = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [s, a, p, t, c, d, dp, ex, ec, pr, fa, li] = await Promise.all([
+      const [s, a, p, t, c, d, dp, ex, ec, pr, fa, li, lp] = await Promise.all([
         supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('admins').select('*').order('created_at', { ascending: true }),
         // PENTING: jangan ambil kolom `image` di sini. Gambar produk lama
@@ -344,6 +370,7 @@ export function useStore() {
         supabase.from('prepaid_rent').select('*').order('start_date', { ascending: false }),
         supabase.from('fixed_assets').select('*').order('purchase_date', { ascending: false }),
         supabase.from('liabilities').select('*').order('date', { ascending: false }),
+        supabase.from('liability_payments').select('*').order('payment_date', { ascending: false }).limit(2000),
       ])
       for (const r of [s, a, p, t, c, d]) if (r.error) throw r.error
       if (!mounted.current) return
@@ -373,6 +400,7 @@ export function useStore() {
       if (!pr.error) setPrepaidRent((pr.data || []).map(prepaidRentFromDB))
       if (!fa.error) setFixedAssets((fa.data || []).map(fixedAssetFromDB))
       if (!li.error) setLiabilities((li.data || []).map(liabilityFromDB))
+      if (!lp.error) setLiabilityPayments((lp.data || []).map(liabilityPaymentFromDB))
 
       // NOTE: Legacy "auto-fix stale=lunas" sync DIHAPUS karena bisa
       // mem-issue UPDATE bulk ke ratusan baris saat startup → potensi
@@ -459,6 +487,12 @@ export function useStore() {
     if (!e && mounted.current) setLiabilities((data || []).map(liabilityFromDB))
   }, [])
 
+  const refreshLiabilityPayments = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from('liability_payments').select('*').order('payment_date', { ascending: false }).limit(2000)
+    if (!e && mounted.current) setLiabilityPayments((data || []).map(liabilityPaymentFromDB))
+  }, [])
+
   // ─── Realtime subscriptions ───────────────────────────────────────
   // Satu channel, satu subscription. Setiap perubahan dipush ke handler
   // yang DI-DEBOUNCE: kalau payDebt mengupdate 4 tabel dalam 100ms, kita
@@ -483,6 +517,7 @@ export function useStore() {
       if (tables.includes('prepaid_rent'))  refreshPrepaidRent()
       if (tables.includes('fixed_assets'))  refreshFixedAssets()
       if (tables.includes('liabilities'))   refreshLiabilities()
+      if (tables.includes('liability_payments')) { refreshLiabilityPayments(); refreshLiabilities(); refreshExpenses() }
       if (tables.includes('products')) {
         // Kolom ringan dulu (anti-timeout), lalu hydrate gambar di belakang.
         supabase.from('products').select(PRODUCT_LIGHT_COLS)
@@ -522,6 +557,8 @@ export function useStore() {
         () => schedule('fixed_assets'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'liabilities' },
         () => schedule('liabilities'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'liability_payments' },
+        () => schedule('liability_payments'))
       .subscribe()
 
     return () => {
@@ -793,6 +830,117 @@ export function useStore() {
     if (mounted.current) setLiabilities(prev => prev.filter(x => x.id !== id))
     return { ok: true }
   }), [wrap])
+
+  // ---------- PEMBAYARAN HUTANG ----------
+  const resyncLiability = useCallback(async () => {
+    await Promise.all([refreshExpenses(), refreshLiabilities(), refreshLiabilityPayments()])
+  }, [refreshExpenses, refreshLiabilities, refreshLiabilityPayments])
+
+  // Satu pembayaran ke satu hutang: buat expense (flag laba sesuai jenis) +
+  // catat liability_payment + tambah liabilities.paid.
+  const applyPayment = useCallback(async (liab, { date, amount, method, notes }) => {
+    const pdate = date || new Date().toISOString().slice(0, 10)
+    const pmethod = method || 'transfer'
+    const amt = Number(amount) || 0
+    const affects = liabilityAffectsProfit(liab.type)
+    const { data: exRow, error: exErr } = await supabase.from('expenses').insert({
+      date: pdate,
+      name: `Pembayaran Hutang - ${liab.name}`,
+      amount: amt,
+      category: 'pembayaran-hutang',
+      notes: notes || `Pembayaran hutang (${liab.type})`,
+      payment_method: pmethod,
+      affects_profit: affects,
+      liability_id: liab.id,
+      cashier_id: currentUser?.id || null,
+    }).select().single()
+    if (exErr) return { ok: false, error: exErr.message }
+    const { error: lpErr } = await supabase.from('liability_payments').insert({
+      liability_id: liab.id, payment_date: pdate, amount: amt,
+      payment_method: pmethod, notes: notes || '', expense_id: exRow.id, created_by: currentUser?.id || null,
+    })
+    if (lpErr) return { ok: false, error: lpErr.message }
+    const newPaid = (Number(liab.paid) || 0) + amt
+    const { error: upErr } = await supabase.from('liabilities').update({ paid: newPaid }).eq('id', liab.id)
+    if (upErr) return { ok: false, error: upErr.message }
+    return { ok: true }
+  }, [currentUser])
+
+  const payLiability = useCallback(async (liabilityId, data) => wrap(async () => {
+    const amt = Number(data.amount) || 0
+    if (!(amt > 0)) return { ok: false, error: 'Nominal harus lebih dari 0' }
+    const liab = liabilities.find(l => l.id === liabilityId)
+    if (!liab) return { ok: false, error: 'Hutang tidak ditemukan' }
+    const remaining = Math.max(0, (Number(liab.amount) || 0) - (Number(liab.paid) || 0))
+    if (amt > remaining + 0.5) return { ok: false, error: 'Nominal melebihi sisa hutang' }
+    const res = await applyPayment(liab, data)
+    await resyncLiability()
+    return res
+  }), [wrap, liabilities, applyPayment, resyncLiability])
+
+  // FIFO: bayar tanpa memilih hutang spesifik → hutang paling lama dulu.
+  const payLiabilitiesFIFO = useCallback(async (amount, data) => wrap(async () => {
+    let remaining = Number(amount) || 0
+    if (!(remaining > 0)) return { ok: false, error: 'Nominal harus lebih dari 0' }
+    const queue = liabilities
+      .filter(l => ((Number(l.amount) || 0) - (Number(l.paid) || 0)) > 0.0001)
+      .sort((a, b) => (new Date(a.date) - new Date(b.date)) || (new Date(a.createdAt) - new Date(b.createdAt)))
+    if (queue.length === 0) return { ok: false, error: 'Tidak ada hutang aktif' }
+    const totalRemaining = queue.reduce((s, l) => s + ((Number(l.amount) || 0) - (Number(l.paid) || 0)), 0)
+    if (remaining > totalRemaining + 0.5) return { ok: false, error: 'Nominal melebihi total hutang aktif' }
+    for (const liab of queue) {
+      if (remaining <= 0) break
+      const due = (Number(liab.amount) || 0) - (Number(liab.paid) || 0)
+      const pay = Math.min(due, remaining)
+      const res = await applyPayment(liab, { ...data, amount: pay })
+      if (!res.ok) { await resyncLiability(); return res }
+      remaining -= pay
+    }
+    await resyncLiability()
+    return { ok: true }
+  }), [wrap, liabilities, applyPayment, resyncLiability])
+
+  const editLiabilityPayment = useCallback(async (paymentId, data) => wrap(async () => {
+    const pay = liabilityPayments.find(p => p.id === paymentId)
+    if (!pay) return { ok: false, error: 'Pembayaran tidak ditemukan' }
+    const newAmt = Number(data.amount) || 0
+    if (!(newAmt > 0)) return { ok: false, error: 'Nominal harus lebih dari 0' }
+    const liab = liabilities.find(l => l.id === pay.liabilityId)
+    if (liab) {
+      const otherPaid = (Number(liab.paid) || 0) - (Number(pay.amount) || 0)
+      if (newAmt > ((Number(liab.amount) || 0) - otherPaid) + 0.5) return { ok: false, error: 'Nominal melebihi sisa hutang' }
+    }
+    const pdate = data.date || pay.paymentDate
+    const pmethod = data.method || pay.paymentMethod
+    const pnotes = data.notes != null ? data.notes : pay.notes
+    if (pay.expenseId) {
+      await supabase.from('expenses').update({ date: pdate, amount: newAmt, payment_method: pmethod, notes: pnotes || '' }).eq('id', pay.expenseId)
+    }
+    const { error } = await supabase.from('liability_payments').update({ payment_date: pdate, amount: newAmt, payment_method: pmethod, notes: pnotes || '' }).eq('id', paymentId)
+    if (error) return { ok: false, error: error.message }
+    if (liab) {
+      const delta = newAmt - (Number(pay.amount) || 0)
+      const newPaid = Math.max(0, (Number(liab.paid) || 0) + delta)
+      await supabase.from('liabilities').update({ paid: newPaid }).eq('id', liab.id)
+    }
+    await resyncLiability()
+    return { ok: true }
+  }), [wrap, liabilityPayments, liabilities, resyncLiability])
+
+  const deleteLiabilityPayment = useCallback(async (paymentId) => wrap(async () => {
+    const pay = liabilityPayments.find(p => p.id === paymentId)
+    if (!pay) return { ok: false, error: 'Pembayaran tidak ditemukan' }
+    if (pay.expenseId) await supabase.from('expenses').delete().eq('id', pay.expenseId)
+    const { error } = await supabase.from('liability_payments').delete().eq('id', paymentId)
+    if (error) return { ok: false, error: error.message }
+    const liab = liabilities.find(l => l.id === pay.liabilityId)
+    if (liab) {
+      const newPaid = Math.max(0, (Number(liab.paid) || 0) - (Number(pay.amount) || 0))
+      await supabase.from('liabilities').update({ paid: newPaid }).eq('id', liab.id)
+    }
+    await resyncLiability()
+    return { ok: true }
+  }), [wrap, liabilityPayments, liabilities, resyncLiability])
 
   // ---------- PRODUCTS ----------
   // Detect "missing column" errors from PostgREST (Supabase REST API)
@@ -1727,9 +1875,14 @@ export function useStore() {
       .reduce((s, e) => s + (+e.amount || 0), 0)
     const monthExpenses = expenses.filter(e => inRange(e.date, monthStart))
       .reduce((s, e) => s + (+e.amount || 0), 0)
-    // Laba bersih = total penjualan (omzet) − total pengeluaran
-    const labaBersih = totalOmzet - totalExpenses
-    const monthLaba = monthOmzet - monthExpenses
+    // Pengeluaran OPERASIONAL (yang memotong laba) — exclude pembayaran hutang
+    // non-operasional yang ditandai affectsProfit = false.
+    const opOnly = (e) => e.affectsProfit !== false
+    const opExpenses = expenses.filter(opOnly).reduce((s, e) => s + (+e.amount || 0), 0)
+    const monthOpExpenses = expenses.filter(e => opOnly(e) && inRange(e.date, monthStart)).reduce((s, e) => s + (+e.amount || 0), 0)
+    // Laba bersih = total penjualan (omzet) − pengeluaran operasional
+    const labaBersih = totalOmzet - opExpenses
+    const monthLaba = monthOmzet - monthOpExpenses
 
     // Customer + debt stats
     const activeDebts = debts.filter(d => d.status === 'aktif')
@@ -1781,14 +1934,15 @@ export function useStore() {
     loading, busy, error,
     products, transactions, storeInfo, stats,
     admins, currentUser, customers, debts, debtPayments, expenses, expenseCategories,
-    prepaidRent, fixedAssets, liabilities,
+    prepaidRent, fixedAssets, liabilities, liabilityPayments,
     refreshAll, refreshCustomers, refreshDebts, refreshTransactions, refreshDebtPayments, refreshExpenses, refreshExpenseCategories,
-    refreshPrepaidRent, refreshFixedAssets, refreshLiabilities,
+    refreshPrepaidRent, refreshFixedAssets, refreshLiabilities, refreshLiabilityPayments,
     addExpense, updateExpense, deleteExpense,
     addExpenseCategory, updateExpenseCategory, deleteExpenseCategory,
     addPrepaidRent, updatePrepaidRent, deletePrepaidRent,
     addFixedAsset, updateFixedAsset, deleteFixedAsset,
     addLiability, updateLiability, deleteLiability,
+    payLiability, payLiabilitiesFIFO, editLiabilityPayment, deleteLiabilityPayment,
     syncDebtPaymentStatus, recalculateCustomerSummary, processDebtPayment,
     addProduct, updateProduct, deleteProduct,
     addTransaction, updateTransactionStatus, updateTransactionPayment, deleteTransaction, editTransaction,
