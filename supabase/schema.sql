@@ -205,6 +205,25 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date       ON public.expenses (date DESC
 CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON public.expenses (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_expenses_category   ON public.expenses (category);
 
+-- Kategori pengeluaran (bisa dikelola dari UI). id = slug text.
+CREATE TABLE IF NOT EXISTS public.expense_categories (
+  id          text PRIMARY KEY,
+  name        text NOT NULL DEFAULT '',
+  icon        text DEFAULT '📦',
+  sort        integer DEFAULT 0,
+  created_at  timestamptz DEFAULT now()
+);
+
+INSERT INTO public.expense_categories (id, name, icon, sort) VALUES
+  ('bahan',       'Bahan',       '🧵', 1),
+  ('gaji',        'Gaji',        '💰', 2),
+  ('operasional', 'Operasional', '🛠️', 3),
+  ('listrik',     'Listrik',     '💡', 4),
+  ('sewa',        'Sewa',        '🏠', 5),
+  ('transport',   'Transport',   '🚚', 6),
+  ('lain-lain',   'Lain-lain',   '📦', 7)
+ON CONFLICT (id) DO NOTHING;
+
 -- ---------- TRIGGERS ----------
 
 -- Auto-update updated_at on customers + debts + settings
@@ -274,6 +293,7 @@ ALTER TABLE public.transactions   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.debts          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.debt_payments  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expense_categories ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN CREATE POLICY "anon all settings"      ON public.settings      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all admins"        ON public.admins        FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -283,6 +303,7 @@ DO $$ BEGIN CREATE POLICY "anon all transactions"  ON public.transactions  FOR A
 DO $$ BEGIN CREATE POLICY "anon all debts"         ON public.debts         FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all debt_payments" ON public.debt_payments FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all expenses"      ON public.expenses      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "anon all expense_categories" ON public.expense_categories FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------- GRANTS ----------
 -- RLS policy mengatur baris mana yang boleh diakses, tapi role `anon`
@@ -330,7 +351,7 @@ DO $$ BEGIN CREATE POLICY "Public delete invoices" ON storage.objects FOR DELETE
 DO $$
 DECLARE
   tbl text;
-  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses'];
+  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses','expense_categories'];
 BEGIN
   -- Skip the whole block if the publication doesn't exist yet (non-Supabase Postgres)
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN

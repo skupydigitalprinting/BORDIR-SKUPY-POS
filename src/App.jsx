@@ -293,6 +293,10 @@ function AppShell() {
       addExpense={store.addExpense}
       updateExpense={store.updateExpense}
       deleteExpense={store.deleteExpense}
+      categories={store.expenseCategories}
+      addCategory={store.addExpenseCategory}
+      updateCategory={store.updateExpenseCategory}
+      deleteCategory={store.deleteExpenseCategory}
       currentUser={store.currentUser}
       busy={store.busy}
     /> : null,

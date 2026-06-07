@@ -180,6 +180,17 @@ const expenseToDB = (e) => ({
   cashier_id: e.cashierId || null,
 })
 
+// Kategori pengeluaran (id = slug, label = name, icon).
+const expenseCatFromDB = (r) => ({
+  id: r.id,
+  label: r.name || r.id,
+  icon: r.icon || '📦',
+  sort: r.sort ?? 0,
+})
+
+const slugifyCat = (s) =>
+  (String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'kategori')
+
 // ---------- Hook ----------
 
 export function useStore() {
@@ -194,6 +205,7 @@ export function useStore() {
   const [debts, setDebts] = useState([])
   const [debtPayments, setDebtPayments] = useState([])
   const [expenses, setExpenses] = useState([])
+  const [expenseCategories, setExpenseCategories] = useState([])
   const [currentUser, setCurrentUser] = useState(() => loadSession())
   const mounted = useRef(true)
 
@@ -227,7 +239,7 @@ export function useStore() {
   const refreshAll = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [s, a, p, t, c, d, dp, ex] = await Promise.all([
+      const [s, a, p, t, c, d, dp, ex, ec] = await Promise.all([
         supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('admins').select('*').order('created_at', { ascending: true }),
         // PENTING: jangan ambil kolom `image` di sini. Gambar produk lama
@@ -243,6 +255,8 @@ export function useStore() {
         supabase.from('debt_payments').select('id, debt_id, invoice_no, amount, payment_method, paid_at, cashier_id').order('paid_at', { ascending: false }).limit(2000),
         // Pengeluaran toko — untuk modul Pengeluaran + laba-rugi dashboard.
         supabase.from('expenses').select('*').order('date', { ascending: false }).limit(2000),
+        // Kategori pengeluaran (dikelola dari UI).
+        supabase.from('expense_categories').select('*').order('sort', { ascending: true }),
       ])
       for (const r of [s, a, p, t, c, d]) if (r.error) throw r.error
       if (!mounted.current) return
@@ -266,6 +280,8 @@ export function useStore() {
       if (!dp.error) setDebtPayments(dp.data || [])
       // expenses — kalau tabel belum dibuat (migrasi belum dijalankan), biarkan kosong.
       if (!ex.error) setExpenses((ex.data || []).map(expenseFromDB))
+      // kategori pengeluaran — kalau tabel belum ada, biarkan kosong.
+      if (!ec.error) setExpenseCategories((ec.data || []).map(expenseCatFromDB))
 
       // NOTE: Legacy "auto-fix stale=lunas" sync DIHAPUS karena bisa
       // mem-issue UPDATE bulk ke ratusan baris saat startup → potensi
@@ -327,6 +343,13 @@ export function useStore() {
     if (!e && mounted.current) setExpenses((data || []).map(expenseFromDB))
   }, [])
 
+  const refreshExpenseCategories = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from('expense_categories').select('*')
+      .order('sort', { ascending: true })
+    if (!e && mounted.current) setExpenseCategories((data || []).map(expenseCatFromDB))
+  }, [])
+
   // ─── Realtime subscriptions ───────────────────────────────────────
   // Satu channel, satu subscription. Setiap perubahan dipush ke handler
   // yang DI-DEBOUNCE: kalau payDebt mengupdate 4 tabel dalam 100ms, kita
@@ -347,6 +370,7 @@ export function useStore() {
       if (tables.includes('customers'))     refreshCustomers()
       if (tables.includes('debt_payments')) refreshDebtPayments()
       if (tables.includes('expenses'))      refreshExpenses()
+      if (tables.includes('expense_categories')) refreshExpenseCategories()
       if (tables.includes('products')) {
         // Kolom ringan dulu (anti-timeout), lalu hydrate gambar di belakang.
         supabase.from('products').select(PRODUCT_LIGHT_COLS)
@@ -378,6 +402,8 @@ export function useStore() {
         () => schedule('products'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' },
         () => schedule('expenses'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expense_categories' },
+        () => schedule('expense_categories'))
       .subscribe()
 
     return () => {
@@ -527,6 +553,49 @@ export function useStore() {
     if (mounted.current) setExpenses(prev => prev.filter(x => x.id !== id))
     return { ok: true }
   }), [wrap])
+
+  // ---------- EXPENSE CATEGORIES (kategori pengeluaran, tersimpan di DB) ----------
+  const addExpenseCategory = useCallback(async ({ label, icon }) => wrap(async () => {
+    const name = (label || '').trim()
+    if (!name) return { ok: false, error: 'Nama kategori wajib diisi' }
+    if (expenseCategories.some(c => c.label.toLowerCase() === name.toLowerCase()))
+      return { ok: false, error: 'Kategori dengan nama itu sudah ada' }
+    let id = slugifyCat(name)
+    if (expenseCategories.some(c => c.id === id)) {
+      let n = 2; while (expenseCategories.some(c => c.id === `${id}-${n}`)) n++; id = `${id}-${n}`
+    }
+    const sort = (expenseCategories.reduce((m, c) => Math.max(m, c.sort || 0), 0)) + 1
+    const { data: row, error: e } = await supabase.from('expense_categories')
+      .insert({ id, name, icon: (icon || '').trim() || '📦', sort }).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setExpenseCategories(prev => [...prev, expenseCatFromDB(row)].sort((a, b) => a.sort - b.sort))
+    return { ok: true, id }
+  }), [wrap, expenseCategories])
+
+  const updateExpenseCategory = useCallback(async (id, { label, icon }) => wrap(async () => {
+    const name = label != null ? String(label).trim() : null
+    if (name === '') return { ok: false, error: 'Nama kategori tidak boleh kosong' }
+    if (name && expenseCategories.some(c => c.id !== id && c.label.toLowerCase() === name.toLowerCase()))
+      return { ok: false, error: 'Kategori dengan nama itu sudah ada' }
+    const patch = {}
+    if (name != null) patch.name = name
+    if (icon != null) patch.icon = String(icon).trim() || '📦'
+    const { data: row, error: e } = await supabase.from('expense_categories')
+      .update(patch).eq('id', id).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setExpenseCategories(prev => prev.map(c => c.id === id ? expenseCatFromDB(row) : c))
+    return { ok: true }
+  }), [wrap, expenseCategories])
+
+  const deleteExpenseCategory = useCallback(async (id) => wrap(async () => {
+    if (expenseCategories.length <= 1) return { ok: false, error: 'Minimal harus ada 1 kategori' }
+    const { error: e } = await supabase.from('expense_categories').delete().eq('id', id)
+    if (e) return { ok: false, error: e.message }
+    // Catatan: pengeluaran lama TIDAK diubah — kolom category tetap menyimpan
+    // slug lama supaya datanya aman; labelnya akan tampil sebagai slug itu.
+    if (mounted.current) setExpenseCategories(prev => prev.filter(c => c.id !== id))
+    return { ok: true }
+  }), [wrap, expenseCategories])
 
   // ---------- PRODUCTS ----------
   // Detect "missing column" errors from PostgREST (Supabase REST API)
@@ -1514,9 +1583,10 @@ export function useStore() {
   return {
     loading, busy, error,
     products, transactions, storeInfo, stats,
-    admins, currentUser, customers, debts, debtPayments, expenses,
-    refreshAll, refreshCustomers, refreshDebts, refreshTransactions, refreshDebtPayments, refreshExpenses,
+    admins, currentUser, customers, debts, debtPayments, expenses, expenseCategories,
+    refreshAll, refreshCustomers, refreshDebts, refreshTransactions, refreshDebtPayments, refreshExpenses, refreshExpenseCategories,
     addExpense, updateExpense, deleteExpense,
+    addExpenseCategory, updateExpenseCategory, deleteExpenseCategory,
     syncDebtPaymentStatus, recalculateCustomerSummary, processDebtPayment,
     addProduct, updateProduct, deleteProduct,
     addTransaction, updateTransactionStatus, updateTransactionPayment, deleteTransaction, editTransaction,

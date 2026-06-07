@@ -3,11 +3,10 @@ import {
   Search, Plus, Edit2, Trash2, Wallet, TrendingDown, CalendarDays,
   Tags, X, AlertTriangle, Loader2, Receipt,
 } from 'lucide-react'
-import { Input, Button, EmptyState } from '../components/ui'
+import { Button, EmptyState } from '../components/ui'
 import Modal from '../components/Modal'
 import CategoryManager from '../components/CategoryManager'
 import { formatRupiah, formatDate } from '../utils/helpers'
-import { useExpenseCategories, getExpenseCatLabel } from '../hooks/useExpenseCategories'
 import { useToast } from '../components/Toast'
 
 const PAYMENT_OPTIONS = [
@@ -22,11 +21,21 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 // Default metode pembayaran = Transfer (bukan Cash).
 const EMPTY = () => ({ date: todayISO(), name: '', amount: '', category: '', notes: '', paymentMethod: 'transfer' })
 
+// Gaya field konsisten untuk form (1 kolom, full width, rounded, border halus).
+const LBL = 'block text-xs font-semibold mb-2'
+const LBL_STYLE = { color: 'var(--text-secondary)', fontFamily: 'Syne', letterSpacing: '0.02em' }
+const FIELD = 'w-full px-4 py-3 rounded-xl text-sm exp-field'
+const FIELD_STYLE = { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }
+
 export default function Pengeluaran({
   expenses = [], addExpense, updateExpense, deleteExpense, busy,
+  categories = [], addCategory, updateCategory, deleteCategory,
 }) {
   const toast = useToast()
-  const { categories, addCategory, updateCategory, deleteCategory } = useExpenseCategories()
+  // Label kategori dari daftar DB; fallback ke kode/slug bila kategori dihapus.
+  const catLabelOf = (id) => categories.find(c => c.id === id)?.label || id || '-'
+  // Hitung berapa pengeluaran yang memakai kategori tertentu (untuk konfirmasi hapus).
+  const usageOf = (id) => expenses.filter(e => e.category === id).length
 
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('all')
@@ -116,7 +125,12 @@ export default function Pengeluaran({
 
   return (
     <div className="flex-1 overflow-y-auto mesh-bg">
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <style>{`
+        .exp-field { transition: border-color .15s ease, box-shadow .15s ease; outline: none; }
+        .exp-field:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }
+        .exp-ph::placeholder { color: var(--text-muted); opacity: 0.5; }
+      `}</style>
+      <div className="p-4 sm:p-6 max-w-3xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div>
@@ -220,125 +234,136 @@ export default function Pengeluaran({
             action={<Button variant="primary" size="sm" onClick={openAdd}><Plus size={13} /> Tambah</Button>}
           />
         ) : (
-          <div className="space-y-2">
-            {filtered.map((e, idx) => (
-              <div key={e.id}
-                className="rounded-2xl p-4 animate-fadeIn flex items-center gap-3"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationDelay: `${idx * 20}ms` }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-                  {categories.find(c => c.id === e.category)?.icon || '📦'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                      {e.name}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide"
-                      style={{ background: 'rgba(139,92,246,0.12)', color: 'var(--accent-light)', fontFamily: 'Syne' }}>
-                      {getExpenseCatLabel(e.category)}
-                    </span>
+          <div className="space-y-2.5">
+            {filtered.map((e, idx) => {
+              const catLabel = catLabelOf(e.category)
+              const payLabel = (PAYMENT_OPTIONS.find(o => o.id === e.paymentMethod)?.label) || e.paymentMethod
+              return (
+                <div key={e.id}
+                  className="rounded-2xl p-4 animate-fadeIn flex flex-col sm:flex-row sm:items-center gap-3"
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationDelay: `${idx * 20}ms` }}>
+                  {/* Kiri: ikon + info */}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+                      {categories.find(c => c.id === e.category)?.icon || '📦'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)', fontFamily: 'Syne' }}>
+                          {e.name}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                          style={{ background: 'rgba(139,92,246,0.12)', color: 'var(--accent-light)', fontFamily: 'Syne', border: '1px solid rgba(139,92,246,0.2)' }}>
+                          {catLabel}
+                        </span>
+                      </div>
+                      <div className="text-xs mt-1 flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-muted)' }}>
+                        <span className="inline-flex items-center gap-1"><CalendarDays size={11} /> {formatDate(e.date)}</span>
+                        <span style={{ opacity: 0.5 }}>·</span>
+                        <span className="inline-flex items-center gap-1"><Receipt size={11} /> {payLabel}</span>
+                        {e.notes && (<><span style={{ opacity: 0.5 }}>·</span><span className="truncate max-w-[160px]">{e.notes}</span></>)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs mt-0.5 flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-muted)' }}>
-                    <span>{formatDate(e.date)}</span>
-                    <span>·</span>
-                    <span className="uppercase">{e.paymentMethod}</span>
-                    {e.notes && (<><span>·</span><span className="truncate">{e.notes}</span></>)}
+
+                  {/* Kanan: nominal + aksi (turun ke baris bawah di mobile) */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 pl-14 sm:pl-0 border-t sm:border-t-0 pt-2.5 sm:pt-0"
+                    style={{ borderColor: 'var(--border)' }}>
+                    <div className="text-base font-bold whitespace-nowrap" style={{ color: '#ff4d6a', fontFamily: 'Syne' }}>
+                      {formatRupiah(e.amount)}
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button onClick={() => openEdit(e)} title="Edit"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center btn-press"
+                        style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={() => setDelTarget(e)} title="Hapus"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center btn-press"
+                        style={{ background: 'rgba(255,77,106,0.08)', color: 'var(--red)', border: '1px solid rgba(255,77,106,0.15)' }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-sm sm:text-base font-bold" style={{ color: '#ff4d6a', fontFamily: 'Syne' }}>
-                    {formatRupiah(e.amount)}
-                  </div>
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => openEdit(e)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center btn-press"
-                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                    <Edit2 size={13} />
-                  </button>
-                  <button onClick={() => setDelTarget(e)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center btn-press"
-                    style={{ background: 'rgba(255,77,106,0.08)', color: 'var(--red)', border: '1px solid rgba(255,77,106,0.15)' }}>
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Add / Edit modal */}
+      {/* Add / Edit modal — layout 1 kolom vertikal */}
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editId ? 'Edit Pengeluaran' : 'Tambah Pengeluaran'}
         subtitle="Catat pengeluaran toko"
+        size="lg"
       >
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input label="Tanggal" type="date" value={form.date}
-              onChange={(e) => setForm(p => ({ ...p, date: e.target.value }))}
-              style={{ colorScheme: 'dark' }} />
-            <div>
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)', fontFamily: 'Syne' }}>
-                Nominal
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--text-muted)' }}>Rp</span>
-                <input inputMode="numeric" value={amountDisplay} onChange={onAmountChange}
-                  placeholder="0"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm"
-                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
-              </div>
-            </div>
-          </div>
-
-          <Input label="Nama Pengeluaran" value={form.name}
-            onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))}
-            placeholder="cth: Beli benang bordir" />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)', fontFamily: 'Syne' }}>
-                Kategori
-              </label>
-              <select value={form.category}
-                onChange={(e) => setForm(p => ({ ...p, category: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)', fontFamily: 'Syne' }}>
-                Metode Pembayaran
-              </label>
-              <select value={form.paymentMethod}
-                onChange={(e) => setForm(p => ({ ...p, paymentMethod: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-                {PAYMENT_OPTIONS.map(o => (
-                  <option key={o.id} value={o.id}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
+        <div className="space-y-5">
+          {/* Tanggal */}
           <div>
-            <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)', fontFamily: 'Syne' }}>
-              Catatan / Keterangan
-            </label>
-            <textarea rows={2} value={form.notes}
-              onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl text-sm resize-none"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+            <label className={LBL} style={LBL_STYLE}>Tanggal</label>
+            <input type="date" value={form.date}
+              onChange={(e) => setForm(p => ({ ...p, date: e.target.value }))}
+              className={FIELD} style={{ ...FIELD_STYLE, colorScheme: 'dark' }} />
           </div>
 
-          <div className="flex justify-end gap-2 pt-1">
+          {/* Nama Pengeluaran */}
+          <div>
+            <label className={LBL} style={LBL_STYLE}>Nama Pengeluaran</label>
+            <input value={form.name}
+              onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))}
+              placeholder="cth: Beli benang bordir"
+              className={`${FIELD} exp-ph`} style={FIELD_STYLE} />
+          </div>
+
+          {/* Kategori */}
+          <div>
+            <label className={LBL} style={LBL_STYLE}>Kategori</label>
+            <select value={form.category}
+              onChange={(e) => setForm(p => ({ ...p, category: e.target.value }))}
+              className={FIELD} style={FIELD_STYLE}>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Nominal */}
+          <div>
+            <label className={LBL} style={LBL_STYLE}>Nominal</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Rp</span>
+              <input inputMode="numeric" value={amountDisplay} onChange={onAmountChange}
+                placeholder="0"
+                className={`${FIELD} exp-ph`} style={{ ...FIELD_STYLE, paddingLeft: 40 }} />
+            </div>
+          </div>
+
+          {/* Metode Pembayaran */}
+          <div>
+            <label className={LBL} style={LBL_STYLE}>Metode Pembayaran</label>
+            <select value={form.paymentMethod}
+              onChange={(e) => setForm(p => ({ ...p, paymentMethod: e.target.value }))}
+              className={FIELD} style={FIELD_STYLE}>
+              {PAYMENT_OPTIONS.map(o => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Catatan / Keterangan */}
+          <div>
+            <label className={LBL} style={LBL_STYLE}>Catatan / Keterangan <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span></label>
+            <textarea rows={3} value={form.notes}
+              onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))}
+              placeholder="Tambahkan keterangan bila perlu…"
+              className={`${FIELD} exp-ph resize-none`} style={FIELD_STYLE} />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>Batal</Button>
             <Button variant="primary" onClick={handleSave} disabled={saving || busy}>
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -371,7 +396,7 @@ export default function Pengeluaran({
         </div>
       </Modal>
 
-      {/* Category manager */}
+      {/* Category manager (kategori pengeluaran — tersimpan di Supabase) */}
       <CategoryManager
         open={catOpen}
         onClose={() => setCatOpen(false)}
@@ -379,6 +404,9 @@ export default function Pengeluaran({
         addCategory={addCategory}
         updateCategory={updateCategory}
         deleteCategory={deleteCategory}
+        title="Kelola Kategori Pengeluaran"
+        subtitle="Tambah, edit, atau hapus kategori pengeluaran"
+        usageOf={usageOf}
       />
     </div>
   )

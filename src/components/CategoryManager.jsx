@@ -27,10 +27,15 @@ function IconPicker({ value, onChange }) {
   )
 }
 
-export default function CategoryManager({ open, onClose, categories, addCategory, updateCategory, deleteCategory }) {
+export default function CategoryManager({
+  open, onClose, categories, addCategory, updateCategory, deleteCategory,
+  title = 'Kelola Kategori', subtitle = 'Tambah, edit, atau hapus kategori produk',
+  usageOf,
+}) {
   const [newLabel, setNewLabel] = useState('')
   const [newIcon, setNewIcon] = useState('📦')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const [editId, setEditId] = useState(null)
   const [editLabel, setEditLabel] = useState('')
@@ -40,30 +45,42 @@ export default function CategoryManager({ open, onClose, categories, addCategory
 
   const resetAdd = () => { setNewLabel(''); setNewIcon('📦'); setError('') }
 
-  const handleAdd = () => {
-    const res = addCategory({ label: newLabel, icon: newIcon })
-    if (!res.ok) { setError(res.error || 'Gagal menambah kategori'); return }
-    resetAdd()
+  const handleAdd = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await addCategory({ label: newLabel, icon: newIcon })
+      if (!res?.ok) { setError(res?.error || 'Gagal menambah kategori'); return }
+      resetAdd()
+    } finally { setSaving(false) }
   }
 
   const startEdit = (c) => {
     setEditId(c.id); setEditLabel(c.label); setEditIcon(c.icon || '📦'); setError('')
   }
   const cancelEdit = () => { setEditId(null); setEditLabel(''); setError('') }
-  const saveEdit = () => {
-    const res = updateCategory(editId, { label: editLabel, icon: editIcon })
-    if (!res.ok) { setError(res.error || 'Gagal menyimpan'); return }
-    cancelEdit()
+  const saveEdit = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await updateCategory(editId, { label: editLabel, icon: editIcon })
+      if (!res?.ok) { setError(res?.error || 'Gagal menyimpan'); return }
+      cancelEdit()
+    } finally { setSaving(false) }
   }
 
-  const handleDelete = (id) => {
-    const res = deleteCategory(id)
-    if (!res.ok) { setError(res.error || 'Gagal menghapus'); return }
-    setConfirmId(null)
+  const handleDelete = async (id) => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await deleteCategory(id)
+      if (!res?.ok) { setError(res?.error || 'Gagal menghapus'); return }
+      setConfirmId(null)
+    } finally { setSaving(false) }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Kelola Kategori" subtitle="Tambah, edit, atau hapus kategori produk" size="md">
+    <Modal open={open} onClose={onClose} title={title} subtitle={subtitle} size="md">
       {error && (
         <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold mb-3"
           style={{ background: 'rgba(255,77,106,0.08)', color: 'var(--red)', border: '1px solid rgba(255,77,106,0.25)' }}>
@@ -100,12 +117,17 @@ export default function CategoryManager({ open, onClose, categories, addCategory
                   </div>
                 </div>
               ) : isConfirming ? (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                <div className="space-y-2">
+                  <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                     Hapus kategori <strong>{c.label}</strong>?
-                  </span>
+                    {usageOf && usageOf(c.id) > 0 && (
+                      <div className="mt-1 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+                        ⚠️ Kategori ini dipakai oleh <strong>{usageOf(c.id)}</strong> pengeluaran. Data lama tetap aman, tapi labelnya akan tampil sebagai kode kategori.
+                      </div>
+                    )}
+                  </div>
                   <div className="flex gap-2 flex-shrink-0">
-                    <Button variant="danger" size="sm" onClick={() => handleDelete(c.id)}>Hapus</Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(c.id)} disabled={saving}>Ya, Hapus</Button>
                     <Button variant="ghost" size="sm" onClick={() => setConfirmId(null)}>Batal</Button>
                   </div>
                 </div>
@@ -156,7 +178,7 @@ export default function CategoryManager({ open, onClose, categories, addCategory
           <div className="text-[11px] mb-1.5" style={{ color: 'var(--text-muted)' }}>Pilih ikon</div>
           <IconPicker value={newIcon} onChange={setNewIcon} />
         </div>
-        <Button variant="primary" className="w-full" onClick={handleAdd} disabled={!newLabel.trim()}>
+        <Button variant="primary" className="w-full" onClick={handleAdd} disabled={!newLabel.trim() || saving}>
           <Plus size={14} /> Tambah Kategori
         </Button>
       </div>

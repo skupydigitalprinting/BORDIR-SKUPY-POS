@@ -63,4 +63,46 @@ BEGIN
   END IF;
 END $$;
 
+-- =====================================================================
+-- KATEGORI PENGELUARAN (expense_categories) — bisa dikelola dari UI.
+-- id memakai slug text supaya pengeluaran lama (expenses.category)
+-- yang menyimpan slug tetap cocok walau kategori diubah/dihapus.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.expense_categories (
+  id          text PRIMARY KEY,
+  name        text NOT NULL DEFAULT '',
+  icon        text DEFAULT '📦',
+  sort        integer DEFAULT 0,
+  created_at  timestamptz DEFAULT now()
+);
+
+-- Seed kategori default (idempotent — tidak menimpa kalau sudah ada).
+INSERT INTO public.expense_categories (id, name, icon, sort) VALUES
+  ('bahan',       'Bahan',       '🧵', 1),
+  ('gaji',        'Gaji',        '💰', 2),
+  ('operasional', 'Operasional', '🛠️', 3),
+  ('listrik',     'Listrik',     '💡', 4),
+  ('sewa',        'Sewa',        '🏠', 5),
+  ('transport',   'Transport',   '🚚', 6),
+  ('lain-lain',   'Lain-lain',   '📦', 7)
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE public.expense_categories ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  CREATE POLICY "anon all expense_categories" ON public.expense_categories FOR ALL USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.expense_categories TO anon, authenticated;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'expense_categories'
+     ) THEN
+    EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.expense_categories';
+  END IF;
+END $$;
+
 NOTIFY pgrst, 'reload schema';
