@@ -246,6 +246,7 @@ CREATE TABLE IF NOT EXISTS public.prepaid_rent (
   updated_at       timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_prepaid_rent_start ON public.prepaid_rent (start_date DESC);
+ALTER TABLE public.prepaid_rent ADD COLUMN IF NOT EXISTS funding text DEFAULT 'cash';
 
 -- Aset tetap (capital, bukan beban langsung) + penyusutan.
 CREATE TABLE IF NOT EXISTS public.fixed_assets (
@@ -263,6 +264,7 @@ CREATE TABLE IF NOT EXISTS public.fixed_assets (
   updated_at     timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_fixed_assets_date ON public.fixed_assets (purchase_date DESC);
+ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS funding text DEFAULT 'cash';
 ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_method text DEFAULT 'none';
 ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_value  numeric DEFAULT 0;
 ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_start  date;

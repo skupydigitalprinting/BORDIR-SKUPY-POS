@@ -249,6 +249,7 @@ function AppShell() {
       prepaidRent={store.prepaidRent}
       fixedAssets={store.fixedAssets}
       liabilities={store.liabilities}
+      liabilityPayments={store.liabilityPayments}
       admins={store.admins}
       storeInfo={store.storeInfo}
       currentUser={store.currentUser}

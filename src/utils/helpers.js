@@ -307,34 +307,48 @@ export function rentCalc(r, asOf = new Date()) {
   return { months, total, monthly, elapsed, amortized, remaining }
 }
 
-// ---------- PENYUSUTAN ASET TETAP ----------
-// Lama tahun (pecahan) sejak tanggal mulai penyusutan sampai asOf.
-export function yearsElapsed(startDate, asOf = new Date()) {
+// ---------- PENYUSUTAN ASET TETAP (BERBASIS BULAN) ----------
+// Jumlah BULAN PENUH yang sudah berjalan sejak tanggal mulai sampai asOf.
+// Hanya berubah saat tanggal yang sama tiap bulan terlewati (tidak per hari),
+// supaya nilai buku stabil & mudah dipahami owner.
+export function monthsElapsedSince(startDate, asOf = new Date()) {
   if (!startDate) return 0
   const s = new Date(startDate)
   if (isNaN(s.getTime())) return 0
-  const ms = new Date(asOf).getTime() - s.getTime()
-  if (ms <= 0) return 0
-  return ms / (365.25 * 24 * 60 * 60 * 1000)
+  const a = new Date(asOf)
+  let m = (a.getFullYear() - s.getFullYear()) * 12 + (a.getMonth() - s.getMonth())
+  // Belum genap 1 bulan kalau tanggal hari ini < tanggal mulai.
+  if (a.getDate() < s.getDate()) m -= 1
+  return Math.max(0, m)
 }
 
-// Hitung penyusutan & nilai buku aset saat ini.
-//   method 'percent' → susut = nilai_awal × (persen/100) × tahun
-//   method 'nominal' → susut = nominal_per_tahun × tahun
-//   method 'none'    → tidak menyusut
-// Nilai buku tidak boleh minus.
+// Hitung penyusutan bulanan & nilai buku aset.
+//   Penyusutan Tahunan = Nilai Beli × (persen/100)   [metode persen]
+//                      = nominal_per_tahun           [metode nominal]
+//   Penyusutan Bulanan = Penyusutan Tahunan / 12
+//   Akumulasi          = Penyusutan Bulanan × Jumlah Bulan Berjalan
+//   Nilai Buku         = Nilai Beli − Akumulasi   (tidak pernah minus)
 export function assetCalc(a, asOf = new Date()) {
   const base = Number(a.amount) || 0
   const method = a.depreciationMethod || 'none'
   const val = Number(a.depreciationValue) || 0
   const start = a.depreciationStart || a.purchaseDate
-  const years = method === 'none' ? 0 : yearsElapsed(start, asOf)
-  let depreciation = 0
-  if (method === 'percent') depreciation = base * (val / 100) * years
-  else if (method === 'nominal') depreciation = val * years
-  depreciation = Math.max(0, Math.min(base, depreciation))
-  const current = Math.max(0, base - depreciation)
-  return { base, method, years, depreciation, current }
+  const months = method === 'none' ? 0 : monthsElapsedSince(start, asOf)
+  let annual = 0
+  if (method === 'percent') annual = base * (val / 100)
+  else if (method === 'nominal') annual = val
+  const monthly = annual / 12
+  let accumulated = monthly * months
+  accumulated = Math.max(0, Math.min(base, accumulated))
+  const current = Math.max(0, base - accumulated)
+  return {
+    base, method,
+    percent: method === 'percent' ? val : 0,
+    annual, monthly, months,
+    accumulated,
+    depreciation: accumulated,   // alias kompatibilitas
+    current,
+  }
 }
 
 // Beban sewa yang diakui dalam rentang [from,to] (atau sampai sekarang bila kosong).

@@ -206,6 +206,7 @@ const prepaidRentFromDB = (r) => ({
   totalAmount: Number(r.total_amount) || 0,
   monthlyExpense: Number(r.monthly_expense) || 0,
   remainingValue: Number(r.remaining_value) || 0,
+  funding: r.funding || 'cash',
   notes: r.notes || '',
   createdAt: r.created_at,
 })
@@ -223,6 +224,7 @@ const prepaidRentToDB = (e) => {
     total_amount: total,
     monthly_expense: monthly,
     remaining_value: total,        // nilai awal; sisa live dihitung di UI
+    funding: e.funding || 'cash',
     notes: (e.notes || '').trim(),
   }
 }
@@ -234,6 +236,7 @@ const fixedAssetFromDB = (r) => ({
   category: r.category || '',
   amount: Number(r.amount) || 0,
   purchaseDate: r.purchase_date,
+  funding: r.funding || 'cash',
   depreciationMethod: r.depreciation_method || 'none',  // none | percent | nominal
   depreciationValue: Number(r.depreciation_value) || 0,
   depreciationStart: r.depreciation_start || null,
@@ -246,6 +249,7 @@ const fixedAssetToDB = (a) => ({
   category: (a.category || '').trim(),
   amount: Number(a.amount) || 0,
   purchase_date: a.purchaseDate || new Date().toISOString().slice(0, 10),
+  funding: a.funding || 'cash',
   depreciation_method: a.depreciationMethod || 'none',
   depreciation_value: Number(a.depreciationValue) || 0,
   depreciation_start: a.depreciationStart || null,
@@ -293,8 +297,10 @@ const liabilityPaymentFromDB = (r) => ({
   createdAt: r.created_at,
 })
 
-// Jenis hutang yang pembayarannya MEMOTONG laba operasional.
-const liabilityAffectsProfit = (type) => (type === 'operasional')
+// Pembayaran hutang TIDAK PERNAH memotong laba bersih — hanya mengurangi
+// Kas & Hutang. (Biaya operasional diakui saat transaksi terjadi, bukan
+// saat hutang dilunasi.) Maka semua expense pembayaran hutang affects_profit=false.
+const liabilityAffectsProfit = () => false
 
 // ---------- Hook ----------
 
@@ -761,8 +767,17 @@ export function useStore() {
     const { data: row, error: e } = await supabase.from('prepaid_rent').insert(payload).select().single()
     if (e) return { ok: false, error: e.message }
     if (mounted.current) setPrepaidRent(prev => [prepaidRentFromDB(row), ...prev])
+    // Jika sumber dana = hutang → otomatis catat hutang sewa (Kas tidak berkurang).
+    if ((data.funding || 'cash') === 'hutang') {
+      await supabase.from('liabilities').insert({
+        name: `Hutang Sewa - ${data.name.trim()}`, type: 'sewa',
+        amount: Number(data.totalAmount) || 0, date: data.startDate || new Date().toISOString().slice(0, 10),
+        cashier_id: currentUser?.id || null,
+      })
+      await refreshLiabilities()
+    }
     return { ok: true, data: prepaidRentFromDB(row) }
-  }), [wrap, currentUser])
+  }), [wrap, currentUser, refreshLiabilities])
 
   const updatePrepaidRent = useCallback(async (id, data) => wrap(async () => {
     if (!data.name?.trim()) return { ok: false, error: 'Nama sewa wajib diisi' }
@@ -787,8 +802,17 @@ export function useStore() {
     const { data: row, error: e } = await supabase.from('fixed_assets').insert(payload).select().single()
     if (e) return { ok: false, error: e.message }
     if (mounted.current) setFixedAssets(prev => [fixedAssetFromDB(row), ...prev])
+    // Jika sumber dana = hutang → otomatis catat hutang aset (Kas tidak berkurang).
+    if ((data.funding || 'cash') === 'hutang') {
+      await supabase.from('liabilities').insert({
+        name: `Hutang Aset - ${data.name.trim()}`, type: 'aset',
+        amount: Number(data.amount) || 0, date: data.purchaseDate || new Date().toISOString().slice(0, 10),
+        cashier_id: currentUser?.id || null,
+      })
+      await refreshLiabilities()
+    }
     return { ok: true, data: fixedAssetFromDB(row) }
-  }), [wrap, currentUser])
+  }), [wrap, currentUser, refreshLiabilities])
 
   const updateFixedAsset = useCallback(async (id, data) => wrap(async () => {
     if (!data.name?.trim()) return { ok: false, error: 'Nama aset wajib diisi' }

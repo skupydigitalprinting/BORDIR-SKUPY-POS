@@ -12,8 +12,13 @@ const LBL_STYLE = { color: 'var(--text-secondary)', fontFamily: 'Syne', letterSp
 const FIELD = 'w-full px-4 py-3 rounded-xl text-sm exp-field'
 const FIELD_STYLE = { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }
 
+const FUNDING = [
+  { id: 'cash', label: 'Cash', hint: 'Kas berkurang.' },
+  { id: 'transfer', label: 'Transfer', hint: 'Kas/saldo bank berkurang.' },
+  { id: 'hutang', label: 'Hutang', hint: 'Kas tidak berkurang; otomatis dicatat sebagai Hutang Sewa.' },
+]
 const todayISO = () => new Date().toISOString().slice(0, 10)
-const EMPTY = () => ({ name: '', location: '', startDate: todayISO(), endDate: '', months: '12', totalAmount: '', notes: '' })
+const EMPTY = () => ({ name: '', location: '', startDate: todayISO(), endDate: '', months: '12', totalAmount: '', funding: 'cash', notes: '' })
 
 // Tambah N bulan ke tanggal ISO, kurangi 1 hari → tanggal berakhir.
 function calcEndDate(startISO, months) {
@@ -55,7 +60,7 @@ export default function SewaDibayarDimuka({
     setForm({
       name: r.name || '', location: r.location || '',
       startDate: r.startDate || todayISO(), endDate: r.endDate || '',
-      months: String(r.months || ''), totalAmount: String(r.totalAmount || ''), notes: r.notes || '',
+      months: String(r.months || ''), totalAmount: String(r.totalAmount || ''), funding: r.funding || 'cash', notes: r.notes || '',
     })
     setModalOpen(true)
   }
@@ -78,7 +83,7 @@ export default function SewaDibayarDimuka({
       const data = {
         name: form.name.trim(), location: form.location.trim(),
         startDate: form.startDate, endDate: form.endDate || calcEndDate(form.startDate, monthsNum),
-        months: monthsNum, totalAmount: totalNum, notes: form.notes.trim(),
+        months: monthsNum, totalAmount: totalNum, funding: form.funding, notes: form.notes.trim(),
       }
       const res = editId ? await updatePrepaidRent(editId, data) : await addPrepaidRent(data)
       if (res.ok) { toast.success(editId ? 'Sewa diperbarui' : 'Sewa ditambahkan'); setModalOpen(false) }
@@ -217,6 +222,16 @@ export default function SewaDibayarDimuka({
                   placeholder="0" className={`${FIELD} exp-ph`} style={{ ...FIELD_STYLE, paddingLeft: 40 }} />
               </div>
             </div>
+          </div>
+
+          <div>
+            <label className={LBL} style={LBL_STYLE}>Sumber Dana</label>
+            <select value={form.funding} onChange={(e) => setForm(p => ({ ...p, funding: e.target.value }))} className={FIELD} style={FIELD_STYLE}>
+              {FUNDING.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+            <p className="text-[11px] mt-1.5" style={{ color: form.funding === 'hutang' ? '#f59e0b' : 'var(--text-muted)' }}>
+              {FUNDING.find(f => f.id === form.funding)?.hint}
+            </p>
           </div>
 
           {/* Preview biaya bulanan */}
