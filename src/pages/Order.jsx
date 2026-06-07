@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Search, Eye, Printer, Trash2, ChevronDown, Wallet, CheckCircle2,
   Download, FileSpreadsheet, Calendar, X, MessageCircle,
@@ -8,11 +8,12 @@ import { buildWaLink, isValidWA, TEMPLATES } from '../utils/whatsapp'
 import {
   formatRupiah, formatDateTime, timeAgo, STATUS_MAP,
   toDateInputValue, monthRange, monthLabel,
+  parseCurrency, toMoney,
 } from '../utils/helpers'
 import { exportTransactionsXLSX } from '../utils/excelExport'
 import { Badge, Button, Input, ProductImage, EmptyState } from '../components/ui'
 import Modal from '../components/Modal'
-import Invoice from '../components/Invoice'
+const Invoice = React.lazy(() => import('../components/Invoice'))
 import { ORDER_STATUS } from '../data/dummyData'
 
 const ORDER_WORKFLOW = [
@@ -159,6 +160,14 @@ export default function Order({
     })
   }, [transactions, search, filterStatus, filterWorkflow])
 
+  // Pagination: render 50 transaksi terbaru dulu (DOM ringan), sisanya
+  // dimuat via tombol "Muat lebih banyak". Totals tetap dihitung dari
+  // seluruh hasil filter (akurat), hanya rendering yang dibatasi.
+  const PAGE_SIZE = 50
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [search, filterStatus, filterWorkflow])
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
+
   const totalFiltered = filtered.reduce((s, t) => s + t.total, 0)
   const totalLunas = filtered
     .filter((t) => t.status === 'lunas')
@@ -169,7 +178,9 @@ export default function Order({
     setPayTrx(t)
     // Pre-fill dengan sisa yang DIDERIVASI (total - paid), bukan dari
     // t.remaining mentah yang bisa stale.
-    const derivedRemaining = Math.max(0, (+t.total || 0) - (+t.paid || 0))
+    // Integer rupiah — JANGAN simpan float (drift "16938240.0000004" akan
+    // jadi "16938240000000004" saat titik desimal dibuang).
+    const derivedRemaining = Math.max(0, toMoney(t.total) - toMoney(t.paid))
     setPayAmount(String(derivedRemaining))
     setPaying(false)
   }
@@ -183,11 +194,13 @@ export default function Order({
   // Jika newRemaining  > 0 → status_bayar = 'pending', remaining = newRemaining
   const handlePay = async () => {
     if (!payTrx || paying) return
-    // Strip non-digit dari input (input pakai formatted "1.000.000")
-    const amount = Number(String(payAmount).replace(/[^\d]/g, ''))
+    // Parse → integer rupiah (input pakai formatted "1.000.000")
+    let amount = parseCurrency(payAmount)
     if (!amount || amount <= 0) return
-    const remainingBefore = Math.max(0, (+payTrx.total || 0) - (+payTrx.paid || 0))
-    if (amount > remainingBefore) return  // safety net; tombol Konfirmasi sudah disable
+    const remainingBefore = Math.max(0, toMoney(payTrx.total) - toMoney(payTrx.paid))
+    // Clamp: jangan pernah kirim lebih besar dari sisa tagihan.
+    if (amount > remainingBefore) amount = remainingBefore
+    if (amount <= 0) return
     setPaying(true)
     try {
       // updateTransactionPayment di useStore sudah handle:
@@ -372,7 +385,7 @@ export default function Order({
               Tidak ada transaksi
             </div>
           ) : (
-            filtered.map((t) => {
+            visible.map((t) => {
               if (!t) return null
               const s = getStatus(t.status)
               const pm = getPayment(t.paymentMethod)
@@ -598,7 +611,7 @@ export default function Order({
               Tidak ada transaksi
             </div>
           ) : (
-            filtered.map((t) => {
+            visible.map((t) => {
               if (!t) return null
               const s = getStatus(t.status)
               const pm = getPayment(t.paymentMethod)
@@ -695,6 +708,15 @@ export default function Order({
           )}
         </div>
       </div>
+
+      {/* Pagination — muat 50 transaksi per klik (DOM ringan) */}
+      {filtered.length > visible.length && (
+        <div className="flex justify-center mt-5 px-4 sm:px-6">
+          <Button variant="secondary" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+            Muat lebih banyak ({visible.length}/{filtered.length})
+          </Button>
+        </div>
+      )}
 
       {/* View Detail Modal */}
       <Modal
@@ -891,9 +913,9 @@ export default function Order({
       >
         {payTrx && (() => {
           // ─── CANONICAL MATH (sama persis seperti Piutang.jsx) ───
-          const total = +payTrx.total || 0
-          const alreadyPaid = +payTrx.paid || 0
-          const currentPayment = Number(String(payAmount).replace(/[^\d]/g, '')) || 0
+          const total = toMoney(payTrx.total)
+          const alreadyPaid = toMoney(payTrx.paid)
+          const currentPayment = parseCurrency(payAmount)
           const remainingBeforePayment = Math.max(0, total - alreadyPaid)
           const remainingAfterPayment = remainingBeforePayment - currentPayment
           const exceeds = currentPayment > remainingBeforePayment
@@ -1318,8 +1340,12 @@ export default function Order({
         </div>
       </Modal>
 
-      {/* Print Invoice */}
-      {printTrx && <Invoice transaction={printTrx} storeInfo={storeInfo} onClose={() => setPrintTrx(null)} />}
+      {/* Print Invoice — lazy (html2canvas chunk hanya saat cetak) */}
+      {printTrx && (
+        <React.Suspense fallback={null}>
+          <Invoice transaction={printTrx} storeInfo={storeInfo} onClose={() => setPrintTrx(null)} />
+        </React.Suspense>
+      )}
     </div>
   )
 }

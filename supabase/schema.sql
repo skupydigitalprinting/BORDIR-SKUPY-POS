@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
 
 CREATE INDEX IF NOT EXISTS idx_customers_name ON public.customers (name);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON public.customers (phone);
+CREATE INDEX IF NOT EXISTS idx_customers_created_at ON public.customers (created_at DESC);
 
 CREATE TABLE IF NOT EXISTS public.products (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,6 +98,10 @@ ALTER TABLE public.products ADD CONSTRAINT products_unit_check
 CREATE INDEX IF NOT EXISTS idx_products_unit ON public.products (unit);
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON public.products (category);
+
+CREATE INDEX IF NOT EXISTS idx_products_created_at ON public.products (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_products_name ON public.products (name);
 
 CREATE TABLE IF NOT EXISTS public.transactions (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -263,6 +268,15 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('invoices', 'invoices', true)
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('products', 'products', true)
+ON CONFLICT (id) DO NOTHING;
+
+DO $$ BEGIN CREATE POLICY "Public read products"   ON storage.objects FOR SELECT USING (bucket_id = 'products'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Public upload products" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'products'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Public update products" ON storage.objects FOR UPDATE USING (bucket_id = 'products'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Public delete products" ON storage.objects FOR DELETE USING (bucket_id = 'products'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE POLICY "Public read logos"      ON storage.objects FOR SELECT USING (bucket_id = 'logos'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "Public upload logos"    ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'logos'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

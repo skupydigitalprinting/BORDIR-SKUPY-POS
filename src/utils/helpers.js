@@ -55,6 +55,28 @@ export function classNames(...classes) {
   return classes.filter(Boolean).join(' ')
 }
 
+// Gambar default produk: logo Skupy (bukan lagi foto Unsplash).
+// Dipakai untuk produk tanpa foto & sebagai fallback onError.
+export const DEFAULT_PRODUCT_IMAGE = '/skupy-logo.png'
+
+// ─────────────────────────────────────────────────────────────
+// UANG — selalu integer rupiah. Jangan pernah pakai float untuk uang.
+//   • toMoney(n)        → bulatkan ke integer rupiah (hindari drift float)
+//   • parseCurrency(v)  → "Rp16.938.240" / 16938240.0000004 → 16938240
+// ─────────────────────────────────────────────────────────────
+export function toMoney(n) {
+  const v = Math.round(Number(n) || 0)
+  return Number.isFinite(v) ? v : 0
+}
+
+export function parseCurrency(value) {
+  // Angka (mungkin float drift) → langsung dibulatkan, JANGAN di-stringify
+  // lalu strip titik (itu yang bikin "16938240.0000004" → 16938240000000004).
+  if (typeof value === 'number') return toMoney(value)
+  // String berformat: ambil digit saja (titik = pemisah ribuan).
+  return Number(String(value).replace(/[^\d]/g, '')) || 0
+}
+
 export function toBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -101,6 +123,63 @@ export function compressImage(file, { maxSize = 800, quality = 0.72 } = {}) {
         }
       }
       img.onerror = () => resolve(reader.result)
+      img.src = reader.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Kompres & resize gambar menjadi BLOB (untuk di-upload ke Supabase Storage).
+ * Default: WebP, lebar maks 1200px, kualitas 75% → target < ~200KB.
+ * Otomatis fallback ke JPEG kalau browser tidak mendukung WebP.
+ *
+ * @param {File|Blob} file
+ * @param {object} opts { maxSize, quality, type, cover }
+ *   - cover: kalau true, crop ke kotak maxSize×maxSize (dipakai untuk thumbnail)
+ * @returns {Promise<Blob>}
+ */
+export function compressImageToBlob(file, { maxSize = 1200, quality = 0.75, type = 'image/webp', cover = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+
+        if (cover) {
+          // Thumbnail kotak: crop tengah lalu skala ke maxSize×maxSize
+          const side = maxSize
+          canvas.width = side
+          canvas.height = side
+          const scale = Math.max(side / img.width, side / img.height)
+          const dw = img.width * scale
+          const dh = img.height * scale
+          ctx.drawImage(img, (side - dw) / 2, (side - dh) / 2, dw, dh)
+        } else {
+          let { width, height } = img
+          if (width > maxSize || height > maxSize) {
+            if (width >= height) { height = Math.round((height * maxSize) / width); width = maxSize }
+            else { width = Math.round((width * maxSize) / height); height = maxSize }
+          }
+          canvas.width = width
+          canvas.height = height
+          ctx.drawImage(img, 0, 0, width, height)
+        }
+
+        const done = (blob) => {
+          if (blob) return resolve(blob)
+          // Fallback JPEG kalau WebP tidak didukung
+          canvas.toBlob(
+            (b2) => b2 ? resolve(b2) : reject(new Error('Gagal mengompres gambar')),
+            'image/jpeg', quality,
+          )
+        }
+        canvas.toBlob(done, type, quality)
+      }
+      img.onerror = () => reject(new Error('Gagal memuat gambar'))
       img.src = reader.result
     }
     reader.onerror = reject
