@@ -160,7 +160,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function Dashboard({ stats, transactions, products = [], debts = [], debtPayments = [], expenses = [], prepaidRent = [], fixedAssets = [], admins = [], setActivePage, storeInfo, currentUser, deleteTransaction, editTransaction, editDebtPayment, deleteDebtPayment }) {
+export default function Dashboard({ stats, transactions, products = [], customers = [], debts = [], debtPayments = [], expenses = [], prepaidRent = [], fixedAssets = [], liabilities = [], admins = [], setActivePage, storeInfo, currentUser, deleteTransaction, editTransaction, editDebtPayment, deleteDebtPayment }) {
   const isOwner = currentUser?.role === 'owner'
 
   // ─── Owner-only: Total Uang Masuk (uang yang BENAR-BENAR diterima) ───

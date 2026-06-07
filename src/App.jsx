@@ -242,6 +242,7 @@ function AppShell() {
       stats={store.stats}
       transactions={store.transactions}
       products={store.products}
+      customers={store.customers}
       debts={store.debts}
       debtPayments={store.debtPayments}
       expenses={store.expenses}
