@@ -307,6 +307,36 @@ export function rentCalc(r, asOf = new Date()) {
   return { months, total, monthly, elapsed, amortized, remaining }
 }
 
+// ---------- PENYUSUTAN ASET TETAP ----------
+// Lama tahun (pecahan) sejak tanggal mulai penyusutan sampai asOf.
+export function yearsElapsed(startDate, asOf = new Date()) {
+  if (!startDate) return 0
+  const s = new Date(startDate)
+  if (isNaN(s.getTime())) return 0
+  const ms = new Date(asOf).getTime() - s.getTime()
+  if (ms <= 0) return 0
+  return ms / (365.25 * 24 * 60 * 60 * 1000)
+}
+
+// Hitung penyusutan & nilai buku aset saat ini.
+//   method 'percent' → susut = nilai_awal × (persen/100) × tahun
+//   method 'nominal' → susut = nominal_per_tahun × tahun
+//   method 'none'    → tidak menyusut
+// Nilai buku tidak boleh minus.
+export function assetCalc(a, asOf = new Date()) {
+  const base = Number(a.amount) || 0
+  const method = a.depreciationMethod || 'none'
+  const val = Number(a.depreciationValue) || 0
+  const start = a.depreciationStart || a.purchaseDate
+  const years = method === 'none' ? 0 : yearsElapsed(start, asOf)
+  let depreciation = 0
+  if (method === 'percent') depreciation = base * (val / 100) * years
+  else if (method === 'nominal') depreciation = val * years
+  depreciation = Math.max(0, Math.min(base, depreciation))
+  const current = Math.max(0, base - depreciation)
+  return { base, method, years, depreciation, current }
+}
+
 // Beban sewa yang diakui dalam rentang [from,to] (atau sampai sekarang bila kosong).
 // Menjumlahkan monthly_expense untuk tiap bulan sewa yang jatuh di dalam rentang.
 export function rentAccruedInRange(rents, from, to) {

@@ -21,6 +21,7 @@ const Piutang = lazy(() => import('./pages/Piutang'))
 const Pengeluaran = lazy(() => import('./pages/Pengeluaran'))
 const SewaDibayarDimuka = lazy(() => import('./pages/SewaDibayarDimuka'))
 const AsetTetap = lazy(() => import('./pages/AsetTetap'))
+const Hutang = lazy(() => import('./pages/Hutang'))
 const Settings = lazy(() => import('./components/Settings'))
 
 function PageLoader() {
@@ -192,7 +193,7 @@ function AppShell() {
       setActivePageRaw('kasir')
       return
     }
-    if ((next === 'sewa' || next === 'aset') && !canSeeOwnerFinance) {
+    if ((next === 'sewa' || next === 'aset' || next === 'hutang') && !canSeeOwnerFinance) {
       toast.warning('Menu ini hanya dapat diakses oleh Owner')
       setActivePageRaw('kasir')
       return
@@ -209,7 +210,7 @@ function AppShell() {
     if (!canSeeExpenses && activePage === 'pengeluaran') {
       setActivePageRaw('kasir')
     }
-    if (!canSeeOwnerFinance && (activePage === 'sewa' || activePage === 'aset')) {
+    if (!canSeeOwnerFinance && (activePage === 'sewa' || activePage === 'aset' || activePage === 'hutang')) {
       setActivePageRaw('kasir')
     }
   }, [canSeeDashboard, canSeeExpenses, canSeeOwnerFinance, activePage])
@@ -246,6 +247,7 @@ function AppShell() {
       expenses={store.expenses}
       prepaidRent={store.prepaidRent}
       fixedAssets={store.fixedAssets}
+      liabilities={store.liabilities}
       admins={store.admins}
       storeInfo={store.storeInfo}
       currentUser={store.currentUser}
@@ -326,6 +328,13 @@ function AppShell() {
       addPrepaidRent={store.addPrepaidRent}
       updatePrepaidRent={store.updatePrepaidRent}
       deletePrepaidRent={store.deletePrepaidRent}
+      busy={store.busy}
+    /> : null,
+    hutang: canSeeOwnerFinance ? <Hutang
+      liabilities={store.liabilities}
+      addLiability={store.addLiability}
+      updateLiability={store.updateLiability}
+      deleteLiability={store.deleteLiability}
       busy={store.busy}
     /> : null,
   }

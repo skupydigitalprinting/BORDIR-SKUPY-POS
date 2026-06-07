@@ -4,8 +4,14 @@ import {
 } from 'lucide-react'
 import { Button, EmptyState } from '../components/ui'
 import Modal from '../components/Modal'
-import { formatRupiah, formatDate } from '../utils/helpers'
+import { formatRupiah, formatDate, assetCalc } from '../utils/helpers'
 import { useToast } from '../components/Toast'
+
+const DEP_METHODS = [
+  { id: 'none', label: 'Tanpa Penyusutan' },
+  { id: 'percent', label: 'Persentase / Tahun' },
+  { id: 'nominal', label: 'Nominal / Tahun' },
+]
 
 const LBL = 'block text-xs font-semibold mb-2'
 const LBL_STYLE = { color: 'var(--text-secondary)', fontFamily: 'Syne', letterSpacing: '0.02em' }
@@ -14,7 +20,7 @@ const FIELD_STYLE = { background: 'var(--bg-elevated)', border: '1px solid var(-
 
 const CATEGORY_SUGGEST = ['Mesin', 'Kendaraan', 'Perabot', 'Elektronik', 'Peralatan', 'Bangunan', 'Lainnya']
 const todayISO = () => new Date().toISOString().slice(0, 10)
-const EMPTY = () => ({ name: '', category: 'Mesin', amount: '', purchaseDate: todayISO(), notes: '' })
+const EMPTY = () => ({ name: '', category: 'Mesin', amount: '', purchaseDate: todayISO(), notes: '', depreciationMethod: 'none', depreciationValue: '', depreciationStart: todayISO() })
 
 export default function AsetTetap({
   fixedAssets = [], addFixedAsset, updateFixedAsset, deleteFixedAsset, busy,
@@ -27,16 +33,25 @@ export default function AsetTetap({
   const [delTarget, setDelTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const total = useMemo(() => fixedAssets.reduce((s, a) => s + (+a.amount || 0), 0), [fixedAssets])
+  // Total memakai NILAI BUKU (setelah penyusutan), bukan nilai beli.
+  const totalBuku = useMemo(() => fixedAssets.reduce((s, a) => s + assetCalc(a).current, 0), [fixedAssets])
+  const totalBeli = useMemo(() => fixedAssets.reduce((s, a) => s + (+a.amount || 0), 0), [fixedAssets])
 
   const openAdd = () => { setEditId(null); setForm(EMPTY()); setModalOpen(true) }
   const openEdit = (a) => {
     setEditId(a.id)
-    setForm({ name: a.name || '', category: a.category || 'Mesin', amount: String(a.amount || ''), purchaseDate: a.purchaseDate || todayISO(), notes: a.notes || '' })
+    setForm({
+      name: a.name || '', category: a.category || 'Mesin', amount: String(a.amount || ''),
+      purchaseDate: a.purchaseDate || todayISO(), notes: a.notes || '',
+      depreciationMethod: a.depreciationMethod || 'none',
+      depreciationValue: a.depreciationValue ? String(a.depreciationValue) : '',
+      depreciationStart: a.depreciationStart || a.purchaseDate || todayISO(),
+    })
     setModalOpen(true)
   }
   const onAmount = (e) => setForm(p => ({ ...p, amount: e.target.value.replace(/[^\d]/g, '') }))
   const amountDisplay = form.amount ? Number(form.amount).toLocaleString('id-ID') : ''
+  const onDepValue = (e) => setForm(p => ({ ...p, depreciationValue: e.target.value.replace(/[^\d.]/g, '') }))
 
   const handleSave = async () => {
     if (saving) return
@@ -45,7 +60,13 @@ export default function AsetTetap({
     if (!amount || amount <= 0) return toast.error('Nilai aset harus > 0')
     setSaving(true)
     try {
-      const data = { name: form.name.trim(), category: form.category.trim(), amount, purchaseDate: form.purchaseDate, notes: form.notes.trim() }
+      const data = {
+        name: form.name.trim(), category: form.category.trim(), amount,
+        purchaseDate: form.purchaseDate, notes: form.notes.trim(),
+        depreciationMethod: form.depreciationMethod,
+        depreciationValue: form.depreciationMethod === 'none' ? 0 : (Number(form.depreciationValue) || 0),
+        depreciationStart: form.depreciationMethod === 'none' ? null : (form.depreciationStart || form.purchaseDate),
+      }
       const res = editId ? await updateFixedAsset(editId, data) : await addFixedAsset(data)
       if (res.ok) { toast.success(editId ? 'Aset diperbarui' : 'Aset ditambahkan'); setModalOpen(false) }
       else toast.error(res.error || 'Gagal menyimpan')
@@ -85,9 +106,10 @@ export default function AsetTetap({
         <div className="rounded-2xl p-4 mb-5" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(99,102,241,0.05))', border: '1px solid rgba(139,92,246,0.25)' }}>
           <div className="flex items-center gap-2 mb-1">
             <Factory size={14} style={{ color: 'var(--accent-light)' }} />
-            <p className="text-xs font-semibold" style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}>Total Nilai Aset Tetap</p>
+            <p className="text-xs font-semibold" style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}>Nilai Buku Aset (setelah penyusutan)</p>
           </div>
-          <p className="text-xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'Syne' }}>{formatRupiah(total)}</p>
+          <p className="text-xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'Syne' }}>{formatRupiah(totalBuku)}</p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Total nilai beli: {formatRupiah(totalBeli)}</p>
         </div>
 
         {fixedAssets.length === 0 ? (
@@ -96,7 +118,10 @@ export default function AsetTetap({
             action={<Button variant="primary" size="sm" onClick={openAdd}><Plus size={13} /> Tambah</Button>} />
         ) : (
           <div className="space-y-2.5">
-            {fixedAssets.map((a, idx) => (
+            {fixedAssets.map((a, idx) => {
+              const c = assetCalc(a)
+              const hasDep = (a.depreciationMethod || 'none') !== 'none'
+              return (
               <div key={a.id} className="rounded-2xl p-4 animate-fadeIn flex flex-col sm:flex-row sm:items-center gap-3"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationDelay: `${idx * 20}ms` }}>
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -112,12 +137,17 @@ export default function AsetTetap({
                     </div>
                     <div className="text-xs mt-1 flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-muted)' }}>
                       <span className="inline-flex items-center gap-1"><CalendarDays size={11} /> {formatDate(a.purchaseDate)}</span>
-                      {a.notes && (<><span style={{ opacity: 0.5 }}>·</span><span className="truncate max-w-[160px]">{a.notes}</span></>)}
+                      <span style={{ opacity: 0.5 }}>·</span>
+                      <span>Beli {formatRupiah(a.amount)}</span>
+                      {hasDep && <><span style={{ opacity: 0.5 }}>·</span><span style={{ color: '#f59e0b' }}>Susut {formatRupiah(c.depreciation)}</span></>}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-3 pl-14 sm:pl-0 border-t sm:border-t-0 pt-2.5 sm:pt-0" style={{ borderColor: 'var(--border)' }}>
-                  <div className="text-base font-bold whitespace-nowrap" style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}>{formatRupiah(a.amount)}</div>
+                  <div className="text-right">
+                    <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Nilai Buku</div>
+                    <div className="text-base font-bold whitespace-nowrap" style={{ color: 'var(--accent-light)', fontFamily: 'Syne' }}>{formatRupiah(c.current)}</div>
+                  </div>
                   <div className="flex gap-1.5 flex-shrink-0">
                     <button onClick={() => openEdit(a)} className="w-9 h-9 rounded-xl flex items-center justify-center btn-press"
                       style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}><Edit2 size={14} /></button>
@@ -126,7 +156,7 @@ export default function AsetTetap({
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>
@@ -153,13 +183,54 @@ export default function AsetTetap({
             </div>
           </div>
           <div>
-            <label className={LBL} style={LBL_STYLE}>Nilai Aset</label>
+            <label className={LBL} style={LBL_STYLE}>Nilai Beli</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Rp</span>
               <input inputMode="numeric" value={amountDisplay} onChange={onAmount}
                 placeholder="0" className={`${FIELD} exp-ph`} style={{ ...FIELD_STYLE, paddingLeft: 40 }} />
             </div>
           </div>
+
+          {/* Penyusutan */}
+          <div>
+            <label className={LBL} style={LBL_STYLE}>Metode Penyusutan</label>
+            <select value={form.depreciationMethod} onChange={(e) => setForm(p => ({ ...p, depreciationMethod: e.target.value }))} className={FIELD} style={FIELD_STYLE}>
+              {DEP_METHODS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+          {form.depreciationMethod !== 'none' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={LBL} style={LBL_STYLE}>{form.depreciationMethod === 'percent' ? 'Persentase / Tahun (%)' : 'Nominal / Tahun'}</label>
+                <div className="relative">
+                  {form.depreciationMethod === 'nominal' && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Rp</span>}
+                  <input inputMode="numeric" value={form.depreciationValue} onChange={onDepValue}
+                    placeholder={form.depreciationMethod === 'percent' ? '10' : '0'}
+                    className={`${FIELD} exp-ph`} style={{ ...FIELD_STYLE, paddingLeft: form.depreciationMethod === 'nominal' ? 40 : undefined }} />
+                </div>
+              </div>
+              <div>
+                <label className={LBL} style={LBL_STYLE}>Mulai Penyusutan</label>
+                <input type="date" value={form.depreciationStart} onChange={(e) => setForm(p => ({ ...p, depreciationStart: e.target.value }))}
+                  className={FIELD} style={{ ...FIELD_STYLE, colorScheme: 'dark' }} />
+              </div>
+            </div>
+          )}
+          {/* Preview nilai buku */}
+          {form.depreciationMethod !== 'none' && (
+            <div className="rounded-xl p-3 flex items-center justify-between" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Estimasi nilai buku saat ini</span>
+              <span className="text-sm font-bold" style={{ color: '#f59e0b', fontFamily: 'Syne' }}>
+                {formatRupiah(assetCalc({
+                  amount: Number(String(form.amount).replace(/[^\d]/g, '')) || 0,
+                  depreciationMethod: form.depreciationMethod,
+                  depreciationValue: Number(form.depreciationValue) || 0,
+                  depreciationStart: form.depreciationStart, purchaseDate: form.purchaseDate,
+                }).current)}
+              </span>
+            </div>
+          )}
+
           <div>
             <label className={LBL} style={LBL_STYLE}>Keterangan <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span></label>
             <textarea rows={2} value={form.notes} onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))}

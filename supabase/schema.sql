@@ -242,19 +242,42 @@ CREATE TABLE IF NOT EXISTS public.prepaid_rent (
 );
 CREATE INDEX IF NOT EXISTS idx_prepaid_rent_start ON public.prepaid_rent (start_date DESC);
 
--- Aset tetap (capital, bukan beban langsung).
+-- Aset tetap (capital, bukan beban langsung) + penyusutan.
 CREATE TABLE IF NOT EXISTS public.fixed_assets (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name           text NOT NULL DEFAULT '',
   category       text DEFAULT '',
   amount         numeric NOT NULL DEFAULT 0,
   purchase_date  date DEFAULT CURRENT_DATE,
+  depreciation_method text DEFAULT 'none',   -- none | percent | nominal
+  depreciation_value  numeric DEFAULT 0,     -- % per tahun atau nominal per tahun
+  depreciation_start  date,
   notes          text DEFAULT '',
   cashier_id     uuid REFERENCES public.admins(id) ON DELETE SET NULL,
   created_at     timestamptz DEFAULT now(),
   updated_at     timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_fixed_assets_date ON public.fixed_assets (purchase_date DESC);
+ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_method text DEFAULT 'none';
+ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_value  numeric DEFAULT 0;
+ALTER TABLE public.fixed_assets ADD COLUMN IF NOT EXISTS depreciation_start  date;
+
+-- Hutang usaha (supplier / bank / lain).
+CREATE TABLE IF NOT EXISTS public.liabilities (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         text NOT NULL DEFAULT '',
+  type         text DEFAULT 'supplier',
+  amount       numeric NOT NULL DEFAULT 0,
+  date         date DEFAULT CURRENT_DATE,
+  due_date     date,
+  status       text DEFAULT 'aktif',
+  notes        text DEFAULT '',
+  cashier_id   uuid REFERENCES public.admins(id) ON DELETE SET NULL,
+  created_at   timestamptz DEFAULT now(),
+  updated_at   timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_liabilities_status ON public.liabilities (status);
+CREATE INDEX IF NOT EXISTS idx_liabilities_date   ON public.liabilities (date DESC);
 
 -- ---------- TRIGGERS ----------
 
@@ -328,6 +351,7 @@ ALTER TABLE public.expenses       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expense_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.prepaid_rent       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fixed_assets       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.liabilities        ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN CREATE POLICY "anon all settings"      ON public.settings      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all admins"        ON public.admins        FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -340,6 +364,7 @@ DO $$ BEGIN CREATE POLICY "anon all expenses"      ON public.expenses      FOR A
 DO $$ BEGIN CREATE POLICY "anon all expense_categories" ON public.expense_categories FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all prepaid_rent"   ON public.prepaid_rent   FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all fixed_assets"   ON public.fixed_assets   FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "anon all liabilities"    ON public.liabilities    FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------- GRANTS ----------
 -- RLS policy mengatur baris mana yang boleh diakses, tapi role `anon`
@@ -387,7 +412,7 @@ DO $$ BEGIN CREATE POLICY "Public delete invoices" ON storage.objects FOR DELETE
 DO $$
 DECLARE
   tbl text;
-  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses','expense_categories','prepaid_rent','fixed_assets'];
+  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses','expense_categories','prepaid_rent','fixed_assets','liabilities'];
 BEGIN
   -- Skip the whole block if the publication doesn't exist yet (non-Supabase Postgres)
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN

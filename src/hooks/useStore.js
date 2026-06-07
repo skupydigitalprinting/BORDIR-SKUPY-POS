@@ -223,13 +223,16 @@ const prepaidRentToDB = (e) => {
   }
 }
 
-// Aset tetap.
+// Aset tetap (+ penyusutan).
 const fixedAssetFromDB = (r) => ({
   id: r.id,
   name: r.name || '',
   category: r.category || '',
   amount: Number(r.amount) || 0,
   purchaseDate: r.purchase_date,
+  depreciationMethod: r.depreciation_method || 'none',  // none | percent | nominal
+  depreciationValue: Number(r.depreciation_value) || 0,
+  depreciationStart: r.depreciation_start || null,
   notes: r.notes || '',
   createdAt: r.created_at,
 })
@@ -239,7 +242,33 @@ const fixedAssetToDB = (a) => ({
   category: (a.category || '').trim(),
   amount: Number(a.amount) || 0,
   purchase_date: a.purchaseDate || new Date().toISOString().slice(0, 10),
+  depreciation_method: a.depreciationMethod || 'none',
+  depreciation_value: Number(a.depreciationValue) || 0,
+  depreciation_start: a.depreciationStart || null,
   notes: (a.notes || '').trim(),
+})
+
+// Hutang usaha.
+const liabilityFromDB = (r) => ({
+  id: r.id,
+  name: r.name || '',
+  type: r.type || 'supplier',
+  amount: Number(r.amount) || 0,
+  date: r.date,
+  dueDate: r.due_date,
+  status: r.status || 'aktif',
+  notes: r.notes || '',
+  createdAt: r.created_at,
+})
+
+const liabilityToDB = (l) => ({
+  name: (l.name || '').trim(),
+  type: l.type || 'supplier',
+  amount: Number(l.amount) || 0,
+  date: l.date || new Date().toISOString().slice(0, 10),
+  due_date: l.dueDate || null,
+  status: l.status || 'aktif',
+  notes: (l.notes || '').trim(),
 })
 
 // ---------- Hook ----------
@@ -259,6 +288,7 @@ export function useStore() {
   const [expenseCategories, setExpenseCategories] = useState([])
   const [prepaidRent, setPrepaidRent] = useState([])
   const [fixedAssets, setFixedAssets] = useState([])
+  const [liabilities, setLiabilities] = useState([])
   const [currentUser, setCurrentUser] = useState(() => loadSession())
   const mounted = useRef(true)
 
@@ -292,7 +322,7 @@ export function useStore() {
   const refreshAll = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [s, a, p, t, c, d, dp, ex, ec, pr, fa] = await Promise.all([
+      const [s, a, p, t, c, d, dp, ex, ec, pr, fa, li] = await Promise.all([
         supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('admins').select('*').order('created_at', { ascending: true }),
         // PENTING: jangan ambil kolom `image` di sini. Gambar produk lama
@@ -310,9 +340,10 @@ export function useStore() {
         supabase.from('expenses').select('*').order('date', { ascending: false }).limit(2000),
         // Kategori pengeluaran (dikelola dari UI).
         supabase.from('expense_categories').select('*').order('sort', { ascending: true }),
-        // Sewa dibayar dimuka + aset tetap (owner finance).
+        // Sewa dibayar dimuka + aset tetap + hutang (owner finance).
         supabase.from('prepaid_rent').select('*').order('start_date', { ascending: false }),
         supabase.from('fixed_assets').select('*').order('purchase_date', { ascending: false }),
+        supabase.from('liabilities').select('*').order('date', { ascending: false }),
       ])
       for (const r of [s, a, p, t, c, d]) if (r.error) throw r.error
       if (!mounted.current) return
@@ -338,9 +369,10 @@ export function useStore() {
       if (!ex.error) setExpenses((ex.data || []).map(expenseFromDB))
       // kategori pengeluaran — kalau tabel belum ada, biarkan kosong.
       if (!ec.error) setExpenseCategories((ec.data || []).map(expenseCatFromDB))
-      // sewa dibayar dimuka + aset tetap — kalau tabel belum ada, biarkan kosong.
+      // sewa dibayar dimuka + aset tetap + hutang — kalau tabel belum ada, biarkan kosong.
       if (!pr.error) setPrepaidRent((pr.data || []).map(prepaidRentFromDB))
       if (!fa.error) setFixedAssets((fa.data || []).map(fixedAssetFromDB))
+      if (!li.error) setLiabilities((li.data || []).map(liabilityFromDB))
 
       // NOTE: Legacy "auto-fix stale=lunas" sync DIHAPUS karena bisa
       // mem-issue UPDATE bulk ke ratusan baris saat startup → potensi
@@ -421,6 +453,12 @@ export function useStore() {
     if (!e && mounted.current) setFixedAssets((data || []).map(fixedAssetFromDB))
   }, [])
 
+  const refreshLiabilities = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from('liabilities').select('*').order('date', { ascending: false })
+    if (!e && mounted.current) setLiabilities((data || []).map(liabilityFromDB))
+  }, [])
+
   // ─── Realtime subscriptions ───────────────────────────────────────
   // Satu channel, satu subscription. Setiap perubahan dipush ke handler
   // yang DI-DEBOUNCE: kalau payDebt mengupdate 4 tabel dalam 100ms, kita
@@ -444,6 +482,7 @@ export function useStore() {
       if (tables.includes('expense_categories')) refreshExpenseCategories()
       if (tables.includes('prepaid_rent'))  refreshPrepaidRent()
       if (tables.includes('fixed_assets'))  refreshFixedAssets()
+      if (tables.includes('liabilities'))   refreshLiabilities()
       if (tables.includes('products')) {
         // Kolom ringan dulu (anti-timeout), lalu hydrate gambar di belakang.
         supabase.from('products').select(PRODUCT_LIGHT_COLS)
@@ -481,6 +520,8 @@ export function useStore() {
         () => schedule('prepaid_rent'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fixed_assets' },
         () => schedule('fixed_assets'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'liabilities' },
+        () => schedule('liabilities'))
       .subscribe()
 
     return () => {
@@ -724,6 +765,32 @@ export function useStore() {
     const { error: e } = await supabase.from('fixed_assets').delete().eq('id', id)
     if (e) return { ok: false, error: e.message }
     if (mounted.current) setFixedAssets(prev => prev.filter(x => x.id !== id))
+    return { ok: true }
+  }), [wrap])
+
+  // ---------- HUTANG (liabilities) ----------
+  const addLiability = useCallback(async (data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama kreditur wajib diisi' }
+    if (!(Number(data.amount) > 0)) return { ok: false, error: 'Nominal harus > 0' }
+    const payload = { ...liabilityToDB(data), cashier_id: currentUser?.id || null }
+    const { data: row, error: e } = await supabase.from('liabilities').insert(payload).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setLiabilities(prev => [liabilityFromDB(row), ...prev])
+    return { ok: true, data: liabilityFromDB(row) }
+  }), [wrap, currentUser])
+
+  const updateLiability = useCallback(async (id, data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama kreditur wajib diisi' }
+    const { data: row, error: e } = await supabase.from('liabilities').update(liabilityToDB(data)).eq('id', id).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setLiabilities(prev => prev.map(x => x.id === id ? liabilityFromDB(row) : x))
+    return { ok: true }
+  }), [wrap])
+
+  const deleteLiability = useCallback(async (id) => wrap(async () => {
+    const { error: e } = await supabase.from('liabilities').delete().eq('id', id)
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setLiabilities(prev => prev.filter(x => x.id !== id))
     return { ok: true }
   }), [wrap])
 
@@ -1714,13 +1781,14 @@ export function useStore() {
     loading, busy, error,
     products, transactions, storeInfo, stats,
     admins, currentUser, customers, debts, debtPayments, expenses, expenseCategories,
-    prepaidRent, fixedAssets,
+    prepaidRent, fixedAssets, liabilities,
     refreshAll, refreshCustomers, refreshDebts, refreshTransactions, refreshDebtPayments, refreshExpenses, refreshExpenseCategories,
-    refreshPrepaidRent, refreshFixedAssets,
+    refreshPrepaidRent, refreshFixedAssets, refreshLiabilities,
     addExpense, updateExpense, deleteExpense,
     addExpenseCategory, updateExpenseCategory, deleteExpenseCategory,
     addPrepaidRent, updatePrepaidRent, deletePrepaidRent,
     addFixedAsset, updateFixedAsset, deleteFixedAsset,
+    addLiability, updateLiability, deleteLiability,
     syncDebtPaymentStatus, recalculateCustomerSummary, processDebtPayment,
     addProduct, updateProduct, deleteProduct,
     addTransaction, updateTransactionStatus, updateTransactionPayment, deleteTransaction, editTransaction,

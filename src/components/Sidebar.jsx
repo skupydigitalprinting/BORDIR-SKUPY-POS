@@ -2,7 +2,7 @@ import React from 'react'
 import {
   LayoutDashboard, ShoppingCart, Package, ClipboardList,
   ChevronRight, X, Settings as SettingsIcon, Crown,
-  Users, Wallet, LogOut, TrendingDown, Factory, Building2,
+  Users, Wallet, LogOut, TrendingDown, Factory, Building2, CreditCard,
 } from 'lucide-react'
 import Logo from './Logo'
 import { canViewDashboard, canViewExpenses, canViewOwnerFinance, roleLabel } from '../utils/helpers'
@@ -17,6 +17,7 @@ const NAV = [
   { id: 'pengeluaran', label: 'Pengeluaran', icon: TrendingDown, hint: 'Catatan pengeluaran' },
   { id: 'aset', label: 'Aset Tetap', icon: Factory, hint: 'Aset modal toko' },
   { id: 'sewa', label: 'Sewa Dibayar Dimuka', icon: Building2, hint: 'Sewa & amortisasi' },
+  { id: 'hutang', label: 'Hutang', icon: CreditCard, hint: 'Hutang usaha' },
 ]
 
 export default function Sidebar({
@@ -36,7 +37,7 @@ export default function Sidebar({
   const visibleNav = NAV.filter(({ id }) => {
     if (id === 'dashboard') return showDashboard
     if (id === 'pengeluaran') return showExpenses
-    if (id === 'aset' || id === 'sewa') return showOwnerFinance
+    if (id === 'aset' || id === 'sewa' || id === 'hutang') return showOwnerFinance
     return true
   })
 
