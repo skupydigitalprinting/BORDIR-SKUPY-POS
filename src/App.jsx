@@ -19,6 +19,8 @@ const Order = lazy(() => import('./pages/Order'))
 const Customers = lazy(() => import('./pages/Customers'))
 const Piutang = lazy(() => import('./pages/Piutang'))
 const Pengeluaran = lazy(() => import('./pages/Pengeluaran'))
+const SewaDibayarDimuka = lazy(() => import('./pages/SewaDibayarDimuka'))
+const AsetTetap = lazy(() => import('./pages/AsetTetap'))
 const Settings = lazy(() => import('./components/Settings'))
 
 function PageLoader() {
@@ -171,6 +173,8 @@ function AppShell() {
   const canSeeDashboard = role === 'owner' || role === 'admin'
   // Modul Pengeluaran: hanya Owner & Staff Admin (Staff Kasir tidak).
   const canSeeExpenses = role === 'owner' || role === 'admin'
+  // Modul keuangan owner (Aset Tetap, Sewa Dibayar Dimuka): hanya Owner.
+  const canSeeOwnerFinance = role === 'owner'
   const [activePage, setActivePageRaw] = useState(canSeeDashboard ? 'dashboard' : 'kasir')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -188,6 +192,11 @@ function AppShell() {
       setActivePageRaw('kasir')
       return
     }
+    if ((next === 'sewa' || next === 'aset') && !canSeeOwnerFinance) {
+      toast.warning('Menu ini hanya dapat diakses oleh Owner')
+      setActivePageRaw('kasir')
+      return
+    }
     setActivePageRaw(next)
   }
 
@@ -200,7 +209,10 @@ function AppShell() {
     if (!canSeeExpenses && activePage === 'pengeluaran') {
       setActivePageRaw('kasir')
     }
-  }, [canSeeDashboard, canSeeExpenses, activePage])
+    if (!canSeeOwnerFinance && (activePage === 'sewa' || activePage === 'aset')) {
+      setActivePageRaw('kasir')
+    }
+  }, [canSeeDashboard, canSeeExpenses, canSeeOwnerFinance, activePage])
 
   if (store.loading) return <LoadingSplash />
   if (store.error) return <ErrorScreen error={store.error} onRetry={store.refreshAll} />
@@ -232,6 +244,8 @@ function AppShell() {
       debts={store.debts}
       debtPayments={store.debtPayments}
       expenses={store.expenses}
+      prepaidRent={store.prepaidRent}
+      fixedAssets={store.fixedAssets}
       admins={store.admins}
       storeInfo={store.storeInfo}
       currentUser={store.currentUser}
@@ -298,6 +312,20 @@ function AppShell() {
       updateCategory={store.updateExpenseCategory}
       deleteCategory={store.deleteExpenseCategory}
       currentUser={store.currentUser}
+      busy={store.busy}
+    /> : null,
+    aset: canSeeOwnerFinance ? <AsetTetap
+      fixedAssets={store.fixedAssets}
+      addFixedAsset={store.addFixedAsset}
+      updateFixedAsset={store.updateFixedAsset}
+      deleteFixedAsset={store.deleteFixedAsset}
+      busy={store.busy}
+    /> : null,
+    sewa: canSeeOwnerFinance ? <SewaDibayarDimuka
+      prepaidRent={store.prepaidRent}
+      addPrepaidRent={store.addPrepaidRent}
+      updatePrepaidRent={store.updatePrepaidRent}
+      deletePrepaidRent={store.deletePrepaidRent}
       busy={store.busy}
     /> : null,
   }

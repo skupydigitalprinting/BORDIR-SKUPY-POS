@@ -2,10 +2,10 @@ import React from 'react'
 import {
   LayoutDashboard, ShoppingCart, Package, ClipboardList,
   ChevronRight, X, Settings as SettingsIcon, Crown,
-  Users, Wallet, LogOut, TrendingDown,
+  Users, Wallet, LogOut, TrendingDown, Factory, Building2,
 } from 'lucide-react'
 import Logo from './Logo'
-import { canViewDashboard, canViewExpenses, roleLabel } from '../utils/helpers'
+import { canViewDashboard, canViewExpenses, canViewOwnerFinance, roleLabel } from '../utils/helpers'
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, hint: 'Statistik & ringkasan' },
@@ -15,6 +15,8 @@ const NAV = [
   { id: 'customers', label: 'Customers', icon: Users, hint: 'Database pelanggan' },
   { id: 'piutang', label: 'Piutang', icon: Wallet, hint: 'Hutang & cicilan' },
   { id: 'pengeluaran', label: 'Pengeluaran', icon: TrendingDown, hint: 'Catatan pengeluaran' },
+  { id: 'aset', label: 'Aset Tetap', icon: Factory, hint: 'Aset modal toko' },
+  { id: 'sewa', label: 'Sewa Dibayar Dimuka', icon: Building2, hint: 'Sewa & amortisasi' },
 ]
 
 export default function Sidebar({
@@ -30,9 +32,11 @@ export default function Sidebar({
   const isOwner = currentUser?.role === 'owner'
   const showDashboard = canViewDashboard(currentUser?.role)
   const showExpenses = canViewExpenses(currentUser?.role)
+  const showOwnerFinance = canViewOwnerFinance(currentUser?.role)
   const visibleNav = NAV.filter(({ id }) => {
     if (id === 'dashboard') return showDashboard
     if (id === 'pengeluaran') return showExpenses
+    if (id === 'aset' || id === 'sewa') return showOwnerFinance
     return true
   })
 

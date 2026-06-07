@@ -276,6 +276,59 @@ export function canViewProfit(role) {
   return role === 'owner'
 }
 
+// Modul keuangan owner (Aset Tetap, Sewa Dibayar Dimuka, Aset Bersih) — OWNER only.
+export function canViewOwnerFinance(role) {
+  return role === 'owner'
+}
+
+// ---------- AMORTISASI SEWA DIBAYAR DIMUKA ----------
+// Berapa bulan sewa yang sudah "terpakai" sampai tanggal asOf.
+// Contoh: mulai 01/01/2026, di bulan ke-3 → 3 bulan terpakai.
+export function rentMonthsElapsed(startDate, months, asOf = new Date()) {
+  if (!startDate) return 0
+  const s = new Date(startDate)
+  const a = new Date(asOf)
+  if (isNaN(s.getTime())) return 0
+  // +1 supaya bulan berjalan dihitung terpakai (sesuai contoh bulan ke-3 = 3 bln).
+  let elapsed = (a.getFullYear() - s.getFullYear()) * 12 + (a.getMonth() - s.getMonth()) + 1
+  if (elapsed < 0) elapsed = 0
+  const total = Math.max(0, Number(months) || 0)
+  return Math.min(elapsed, total)
+}
+
+// Hitung sewa: bulanan, terpakai (amortized), sisa nilai.
+export function rentCalc(r, asOf = new Date()) {
+  const months = Math.max(1, Number(r.months) || 1)
+  const total = Number(r.totalAmount) || 0
+  const monthly = Number(r.monthlyExpense) || Math.round(total / months)
+  const elapsed = rentMonthsElapsed(r.startDate, months, asOf)
+  const amortized = Math.min(total, elapsed * monthly)
+  const remaining = Math.max(0, total - amortized)
+  return { months, total, monthly, elapsed, amortized, remaining }
+}
+
+// Beban sewa yang diakui dalam rentang [from,to] (atau sampai sekarang bila kosong).
+// Menjumlahkan monthly_expense untuk tiap bulan sewa yang jatuh di dalam rentang.
+export function rentAccruedInRange(rents, from, to) {
+  const fromT = from ? new Date(from + 'T00:00:00').getTime() : null
+  const toT = to ? new Date(to + 'T23:59:59').getTime() : Date.now()
+  let sum = 0
+  ;(rents || []).forEach((r) => {
+    const months = Math.max(1, Number(r.months) || 1)
+    const monthly = Number(r.monthlyExpense) || Math.round((Number(r.totalAmount) || 0) / months)
+    const s = r.startDate ? new Date(r.startDate) : null
+    if (!s || isNaN(s.getTime())) return
+    for (let m = 0; m < months; m++) {
+      const d = new Date(s.getFullYear(), s.getMonth() + m, 1).getTime()
+      if (d > Date.now()) break            // bulan belum berjalan → belum jadi beban
+      if (fromT != null && d < fromT) continue
+      if (d > toT) continue
+      sum += monthly
+    }
+  })
+  return sum
+}
+
 // ---------- UNIT (PCS / Meter / Yard) ----------
 
 export const UNIT_OPTIONS = [

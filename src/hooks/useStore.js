@@ -191,6 +191,57 @@ const expenseCatFromDB = (r) => ({
 const slugifyCat = (s) =>
   (String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'kategori')
 
+// Sewa dibayar dimuka.
+const prepaidRentFromDB = (r) => ({
+  id: r.id,
+  name: r.name || '',
+  location: r.location || '',
+  startDate: r.start_date,
+  endDate: r.end_date,
+  months: Number(r.months) || 0,
+  totalAmount: Number(r.total_amount) || 0,
+  monthlyExpense: Number(r.monthly_expense) || 0,
+  remainingValue: Number(r.remaining_value) || 0,
+  notes: r.notes || '',
+  createdAt: r.created_at,
+})
+
+const prepaidRentToDB = (e) => {
+  const months = Math.max(1, Number(e.months) || 1)
+  const total = Number(e.totalAmount) || 0
+  const monthly = Math.round(total / months)
+  return {
+    name: (e.name || '').trim(),
+    location: (e.location || '').trim(),
+    start_date: e.startDate || new Date().toISOString().slice(0, 10),
+    end_date: e.endDate || null,
+    months,
+    total_amount: total,
+    monthly_expense: monthly,
+    remaining_value: total,        // nilai awal; sisa live dihitung di UI
+    notes: (e.notes || '').trim(),
+  }
+}
+
+// Aset tetap.
+const fixedAssetFromDB = (r) => ({
+  id: r.id,
+  name: r.name || '',
+  category: r.category || '',
+  amount: Number(r.amount) || 0,
+  purchaseDate: r.purchase_date,
+  notes: r.notes || '',
+  createdAt: r.created_at,
+})
+
+const fixedAssetToDB = (a) => ({
+  name: (a.name || '').trim(),
+  category: (a.category || '').trim(),
+  amount: Number(a.amount) || 0,
+  purchase_date: a.purchaseDate || new Date().toISOString().slice(0, 10),
+  notes: (a.notes || '').trim(),
+})
+
 // ---------- Hook ----------
 
 export function useStore() {
@@ -206,6 +257,8 @@ export function useStore() {
   const [debtPayments, setDebtPayments] = useState([])
   const [expenses, setExpenses] = useState([])
   const [expenseCategories, setExpenseCategories] = useState([])
+  const [prepaidRent, setPrepaidRent] = useState([])
+  const [fixedAssets, setFixedAssets] = useState([])
   const [currentUser, setCurrentUser] = useState(() => loadSession())
   const mounted = useRef(true)
 
@@ -239,7 +292,7 @@ export function useStore() {
   const refreshAll = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [s, a, p, t, c, d, dp, ex, ec] = await Promise.all([
+      const [s, a, p, t, c, d, dp, ex, ec, pr, fa] = await Promise.all([
         supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('admins').select('*').order('created_at', { ascending: true }),
         // PENTING: jangan ambil kolom `image` di sini. Gambar produk lama
@@ -257,6 +310,9 @@ export function useStore() {
         supabase.from('expenses').select('*').order('date', { ascending: false }).limit(2000),
         // Kategori pengeluaran (dikelola dari UI).
         supabase.from('expense_categories').select('*').order('sort', { ascending: true }),
+        // Sewa dibayar dimuka + aset tetap (owner finance).
+        supabase.from('prepaid_rent').select('*').order('start_date', { ascending: false }),
+        supabase.from('fixed_assets').select('*').order('purchase_date', { ascending: false }),
       ])
       for (const r of [s, a, p, t, c, d]) if (r.error) throw r.error
       if (!mounted.current) return
@@ -282,6 +338,9 @@ export function useStore() {
       if (!ex.error) setExpenses((ex.data || []).map(expenseFromDB))
       // kategori pengeluaran — kalau tabel belum ada, biarkan kosong.
       if (!ec.error) setExpenseCategories((ec.data || []).map(expenseCatFromDB))
+      // sewa dibayar dimuka + aset tetap — kalau tabel belum ada, biarkan kosong.
+      if (!pr.error) setPrepaidRent((pr.data || []).map(prepaidRentFromDB))
+      if (!fa.error) setFixedAssets((fa.data || []).map(fixedAssetFromDB))
 
       // NOTE: Legacy "auto-fix stale=lunas" sync DIHAPUS karena bisa
       // mem-issue UPDATE bulk ke ratusan baris saat startup → potensi
@@ -350,6 +409,18 @@ export function useStore() {
     if (!e && mounted.current) setExpenseCategories((data || []).map(expenseCatFromDB))
   }, [])
 
+  const refreshPrepaidRent = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from('prepaid_rent').select('*').order('start_date', { ascending: false })
+    if (!e && mounted.current) setPrepaidRent((data || []).map(prepaidRentFromDB))
+  }, [])
+
+  const refreshFixedAssets = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from('fixed_assets').select('*').order('purchase_date', { ascending: false })
+    if (!e && mounted.current) setFixedAssets((data || []).map(fixedAssetFromDB))
+  }, [])
+
   // ─── Realtime subscriptions ───────────────────────────────────────
   // Satu channel, satu subscription. Setiap perubahan dipush ke handler
   // yang DI-DEBOUNCE: kalau payDebt mengupdate 4 tabel dalam 100ms, kita
@@ -371,6 +442,8 @@ export function useStore() {
       if (tables.includes('debt_payments')) refreshDebtPayments()
       if (tables.includes('expenses'))      refreshExpenses()
       if (tables.includes('expense_categories')) refreshExpenseCategories()
+      if (tables.includes('prepaid_rent'))  refreshPrepaidRent()
+      if (tables.includes('fixed_assets'))  refreshFixedAssets()
       if (tables.includes('products')) {
         // Kolom ringan dulu (anti-timeout), lalu hydrate gambar di belakang.
         supabase.from('products').select(PRODUCT_LIGHT_COLS)
@@ -404,6 +477,10 @@ export function useStore() {
         () => schedule('expenses'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expense_categories' },
         () => schedule('expense_categories'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prepaid_rent' },
+        () => schedule('prepaid_rent'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fixed_assets' },
+        () => schedule('fixed_assets'))
       .subscribe()
 
     return () => {
@@ -596,6 +673,59 @@ export function useStore() {
     if (mounted.current) setExpenseCategories(prev => prev.filter(c => c.id !== id))
     return { ok: true }
   }), [wrap, expenseCategories])
+
+  // ---------- SEWA DIBAYAR DIMUKA (prepaid_rent) ----------
+  const addPrepaidRent = useCallback(async (data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama sewa wajib diisi' }
+    if (!(Number(data.months) > 0)) return { ok: false, error: 'Lama sewa (bulan) harus > 0' }
+    if (!(Number(data.totalAmount) > 0)) return { ok: false, error: 'Total pembayaran harus > 0' }
+    const payload = { ...prepaidRentToDB(data), cashier_id: currentUser?.id || null }
+    const { data: row, error: e } = await supabase.from('prepaid_rent').insert(payload).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setPrepaidRent(prev => [prepaidRentFromDB(row), ...prev])
+    return { ok: true, data: prepaidRentFromDB(row) }
+  }), [wrap, currentUser])
+
+  const updatePrepaidRent = useCallback(async (id, data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama sewa wajib diisi' }
+    const { data: row, error: e } = await supabase.from('prepaid_rent').update(prepaidRentToDB(data)).eq('id', id).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setPrepaidRent(prev => prev.map(x => x.id === id ? prepaidRentFromDB(row) : x))
+    return { ok: true }
+  }), [wrap])
+
+  const deletePrepaidRent = useCallback(async (id) => wrap(async () => {
+    const { error: e } = await supabase.from('prepaid_rent').delete().eq('id', id)
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setPrepaidRent(prev => prev.filter(x => x.id !== id))
+    return { ok: true }
+  }), [wrap])
+
+  // ---------- ASET TETAP (fixed_assets) ----------
+  const addFixedAsset = useCallback(async (data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama aset wajib diisi' }
+    if (!(Number(data.amount) > 0)) return { ok: false, error: 'Nilai aset harus > 0' }
+    const payload = { ...fixedAssetToDB(data), cashier_id: currentUser?.id || null }
+    const { data: row, error: e } = await supabase.from('fixed_assets').insert(payload).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setFixedAssets(prev => [fixedAssetFromDB(row), ...prev])
+    return { ok: true, data: fixedAssetFromDB(row) }
+  }), [wrap, currentUser])
+
+  const updateFixedAsset = useCallback(async (id, data) => wrap(async () => {
+    if (!data.name?.trim()) return { ok: false, error: 'Nama aset wajib diisi' }
+    const { data: row, error: e } = await supabase.from('fixed_assets').update(fixedAssetToDB(data)).eq('id', id).select().single()
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setFixedAssets(prev => prev.map(x => x.id === id ? fixedAssetFromDB(row) : x))
+    return { ok: true }
+  }), [wrap])
+
+  const deleteFixedAsset = useCallback(async (id) => wrap(async () => {
+    const { error: e } = await supabase.from('fixed_assets').delete().eq('id', id)
+    if (e) return { ok: false, error: e.message }
+    if (mounted.current) setFixedAssets(prev => prev.filter(x => x.id !== id))
+    return { ok: true }
+  }), [wrap])
 
   // ---------- PRODUCTS ----------
   // Detect "missing column" errors from PostgREST (Supabase REST API)
@@ -1584,9 +1714,13 @@ export function useStore() {
     loading, busy, error,
     products, transactions, storeInfo, stats,
     admins, currentUser, customers, debts, debtPayments, expenses, expenseCategories,
+    prepaidRent, fixedAssets,
     refreshAll, refreshCustomers, refreshDebts, refreshTransactions, refreshDebtPayments, refreshExpenses, refreshExpenseCategories,
+    refreshPrepaidRent, refreshFixedAssets,
     addExpense, updateExpense, deleteExpense,
     addExpenseCategory, updateExpenseCategory, deleteExpenseCategory,
+    addPrepaidRent, updatePrepaidRent, deletePrepaidRent,
+    addFixedAsset, updateFixedAsset, deleteFixedAsset,
     syncDebtPaymentStatus, recalculateCustomerSummary, processDebtPayment,
     addProduct, updateProduct, deleteProduct,
     addTransaction, updateTransactionStatus, updateTransactionPayment, deleteTransaction, editTransaction,

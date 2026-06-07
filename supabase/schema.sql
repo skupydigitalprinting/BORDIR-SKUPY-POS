@@ -224,6 +224,38 @@ INSERT INTO public.expense_categories (id, name, icon, sort) VALUES
   ('lain-lain',   'Lain-lain',   '📦', 7)
 ON CONFLICT (id) DO NOTHING;
 
+-- Sewa dibayar dimuka (diamortisasi per bulan).
+CREATE TABLE IF NOT EXISTS public.prepaid_rent (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name             text NOT NULL DEFAULT '',
+  location         text DEFAULT '',
+  start_date       date NOT NULL DEFAULT CURRENT_DATE,
+  end_date         date,
+  months           integer NOT NULL DEFAULT 1,
+  total_amount     numeric NOT NULL DEFAULT 0,
+  monthly_expense  numeric NOT NULL DEFAULT 0,
+  remaining_value  numeric NOT NULL DEFAULT 0,
+  notes            text DEFAULT '',
+  cashier_id       uuid REFERENCES public.admins(id) ON DELETE SET NULL,
+  created_at       timestamptz DEFAULT now(),
+  updated_at       timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_prepaid_rent_start ON public.prepaid_rent (start_date DESC);
+
+-- Aset tetap (capital, bukan beban langsung).
+CREATE TABLE IF NOT EXISTS public.fixed_assets (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name           text NOT NULL DEFAULT '',
+  category       text DEFAULT '',
+  amount         numeric NOT NULL DEFAULT 0,
+  purchase_date  date DEFAULT CURRENT_DATE,
+  notes          text DEFAULT '',
+  cashier_id     uuid REFERENCES public.admins(id) ON DELETE SET NULL,
+  created_at     timestamptz DEFAULT now(),
+  updated_at     timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_fixed_assets_date ON public.fixed_assets (purchase_date DESC);
+
 -- ---------- TRIGGERS ----------
 
 -- Auto-update updated_at on customers + debts + settings
@@ -294,6 +326,8 @@ ALTER TABLE public.debts          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.debt_payments  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expense_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.prepaid_rent       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fixed_assets       ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN CREATE POLICY "anon all settings"      ON public.settings      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all admins"        ON public.admins        FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -304,6 +338,8 @@ DO $$ BEGIN CREATE POLICY "anon all debts"         ON public.debts         FOR A
 DO $$ BEGIN CREATE POLICY "anon all debt_payments" ON public.debt_payments FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all expenses"      ON public.expenses      FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "anon all expense_categories" ON public.expense_categories FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "anon all prepaid_rent"   ON public.prepaid_rent   FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "anon all fixed_assets"   ON public.fixed_assets   FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------- GRANTS ----------
 -- RLS policy mengatur baris mana yang boleh diakses, tapi role `anon`
@@ -351,7 +387,7 @@ DO $$ BEGIN CREATE POLICY "Public delete invoices" ON storage.objects FOR DELETE
 DO $$
 DECLARE
   tbl text;
-  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses','expense_categories'];
+  tables text[] := ARRAY['transactions','customers','debts','debt_payments','products','admins','settings','expenses','expense_categories','prepaid_rent','fixed_assets'];
 BEGIN
   -- Skip the whole block if the publication doesn't exist yet (non-Supabase Postgres)
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN

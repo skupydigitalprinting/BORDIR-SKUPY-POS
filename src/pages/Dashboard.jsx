@@ -8,13 +8,28 @@ import {
   ArrowUpRight, Star, Zap, ArrowRight, Activity,
   Scale, Wallet, TrendingDown, PackageOpen, Banknote, CreditCard, Smartphone, Repeat,
 } from 'lucide-react'
-import { formatRupiah, formatCompact, formatDateTime, timeAgo, STATUS_MAP, roleLabel, toMoney, formatQty } from '../utils/helpers'
+import { formatRupiah, formatCompact, formatDateTime, timeAgo, STATUS_MAP, roleLabel, toMoney, formatQty, rentCalc, rentAccruedInRange } from '../utils/helpers'
 import { Badge, ProductImage } from '../components/ui'
 import { getCatLabel } from '../hooks/useCategories'
 import DashboardCardDetail from '../components/DashboardCardDetail'
 import Logo from '../components/Logo'
 
 const COLORS = ['#8b5cf6', '#10d98a', '#f59e0b', '#3b82f6', '#ff4d6a', '#a78bfa']
+
+function FinanceCard({ emoji, label, value, sub, accent = 'var(--text-primary)', onClick }) {
+  return (
+    <div onClick={onClick}
+      className={`rounded-xl p-3.5 ${onClick ? 'cursor-pointer hover:brightness-110' : ''} transition`}
+      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className="text-sm">{emoji}</span>
+        <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-secondary)', fontFamily: 'Syne' }}>{label}</span>
+      </div>
+      <div className="text-sm sm:text-base font-bold truncate" style={{ color: accent, fontFamily: 'Syne' }}>{value}</div>
+      {sub && <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>{sub}</div>}
+    </div>
+  )
+}
 
 function StatCard({ icon: Icon, label, value, sub, color = 'accent', trend, delay = 0, onClick }) {
   const colors = {
@@ -103,7 +118,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function Dashboard({ stats, transactions, products = [], debts = [], debtPayments = [], expenses = [], admins = [], setActivePage, storeInfo, currentUser, deleteTransaction, editTransaction, editDebtPayment, deleteDebtPayment }) {
+export default function Dashboard({ stats, transactions, products = [], debts = [], debtPayments = [], expenses = [], prepaidRent = [], fixedAssets = [], admins = [], setActivePage, storeInfo, currentUser, deleteTransaction, editTransaction, editDebtPayment, deleteDebtPayment }) {
   const isOwner = currentUser?.role === 'owner'
 
   // ─── Owner-only: Total Uang Masuk (uang yang BENAR-BENAR diterima) ───
@@ -133,14 +148,15 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
   }, [transactions, debtPayments])
 
   // ─── Owner-only Laba-Rugi: rentang tanggal terpisah ───
-  // Laba bersih = TOTAL PENJUALAN − TOTAL PENGELUARAN (bukan dari modal produk).
-  // Realtime: ikut berubah saat transaksi / pengeluaran di-update.
+  // Laba bersih = TOTAL PENJUALAN − PENGELUARAN OPERASIONAL − BEBAN SEWA BULANAN.
+  // Sewa dibayar dimuka TIDAK langsung memotong laba — hanya bagian bulanannya
+  // (amortisasi) yang masuk sebagai beban. Realtime mengikuti perubahan data.
   const [labaFrom, setLabaFrom] = useState('')
   const [labaTo, setLabaTo] = useState('')
 
   const labaRugi = useMemo(() => {
     // Proteksi data: hanya OWNER yang boleh menghitung laba/rugi.
-    if (!isOwner) return { revenue: 0, expense: 0, profit: 0, count: 0 }
+    if (!isOwner) return { revenue: 0, expense: 0, rent: 0, profit: 0, count: 0 }
     const fromT = labaFrom ? new Date(labaFrom + 'T00:00:00').getTime() : null
     const toT = labaTo ? new Date(labaTo + 'T23:59:59').getTime() : null
     const inRange = (val) => {
@@ -152,10 +168,35 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
     // Total penjualan = seluruh transaksi (kecuali yang dibatalkan).
     const sales = (transactions || []).filter(t => (t.orderStatus || '') !== 'dibatalkan' && inRange(t.date))
     const revenue = sales.reduce((s, t) => s + (Number(t.total) || 0), 0)
-    // Total pengeluaran dalam rentang.
+    // Pengeluaran operasional dalam rentang.
     const expense = (expenses || []).filter(e => inRange(e.date)).reduce((s, e) => s + (Number(e.amount) || 0), 0)
-    return { revenue, expense, profit: revenue - expense, count: sales.length }
-  }, [transactions, expenses, labaFrom, labaTo, isOwner])
+    // Beban sewa bulanan (amortisasi) yang jatuh di rentang.
+    const rent = rentAccruedInRange(prepaidRent, labaFrom, labaTo)
+    return { revenue, expense, rent, profit: revenue - expense - rent, count: sales.length }
+  }, [transactions, expenses, prepaidRent, labaFrom, labaTo, isOwner])
+
+  // ─── Neraca ringkas (owner) — kartu posisi keuangan ───
+  const neraca = useMemo(() => {
+    if (!isOwner) return null
+    // Kas = uang masuk (paid) − pengeluaran operasional − total sewa dibayar − total aset tetap.
+    const cashIn = (transactions || []).reduce((s, t) => s + (Number(t.paid) || 0), 0)
+    const opExpenseAll = (expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)
+    const prepaidTotalPaid = (prepaidRent || []).reduce((s, r) => s + (Number(r.totalAmount) || 0), 0)
+    const assetTotal = (fixedAssets || []).reduce((s, a) => s + (Number(a.amount) || 0), 0)
+    const kas = cashIn - opExpenseAll - prepaidTotalPaid - assetTotal
+    // Persediaan = Σ(stok × harga jual) sebagai estimasi nilai persediaan.
+    const persediaan = (products || []).reduce((s, p) => s + (Number(p.stock) || 0) * (Number(p.price) || 0), 0)
+    // Sewa dibayar dimuka = sisa nilai (belum diamortisasi).
+    const sewaSisa = (prepaidRent || []).reduce((s, r) => s + rentCalc(r).remaining, 0)
+    const piutang = Number(stats?.totalActiveDebt) || 0
+    const hutang = 0   // belum ada modul hutang usaha (payable)
+    // Laba bersih (sampai saat ini) = penjualan − op.exp − beban sewa terakru.
+    const salesAll = (transactions || []).filter(t => (t.orderStatus || '') !== 'dibatalkan').reduce((s, t) => s + (Number(t.total) || 0), 0)
+    const rentAccruedAll = rentAccruedInRange(prepaidRent, null, null)
+    const labaBersih = salesAll - opExpenseAll - rentAccruedAll
+    const asetBersih = kas + piutang + persediaan + assetTotal + sewaSisa - hutang
+    return { kas, persediaan, asetTetap: assetTotal, sewaSisa, sewaTotal: prepaidTotalPaid, piutang, hutang, labaBersih, asetBersih }
+  }, [isOwner, transactions, expenses, prepaidRent, fixedAssets, products, stats])
 
   // ─── Owner-only filter: admin dropdown + date range ───
   // - 'all'      → semua admin gabungan
@@ -743,10 +784,38 @@ export default function Dashboard({ stats, transactions, products = [], debts = 
             </div>
 
             <p className="relative text-[11px] mt-3" style={{ color: 'var(--text-muted)' }}>
-              Laba bersih = Total Penjualan − Total Pengeluaran ·{' '}
+              Laba bersih = Penjualan − Pengeluaran Operasional − Beban Sewa Bulanan
+              {labaRugi.rent > 0 && <> · beban sewa periode ini: <strong style={{ color: 'var(--text-secondary)' }}>{formatRupiah(labaRugi.rent)}</strong></>} ·{' '}
               {(labaFrom || labaTo)
                 ? `Periode: ${labaFrom || '…'} s/d ${labaTo || '…'}`
                 : 'Periode: semua waktu (atur tanggal untuk memfilter)'}
+            </p>
+          </div>
+        )}
+
+        {/* Posisi Keuangan / Neraca — OWNER ONLY */}
+        {isOwner && neraca && (
+          <div className="rounded-2xl p-5 mb-5 animate-slideUp"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-strong)' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Banknote size={15} style={{ color: 'var(--accent-light)' }} />
+              <h2 className="font-bold text-sm" style={{ fontFamily: 'Syne', color: 'var(--text-primary)' }}>Posisi Keuangan</h2>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
+                style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', fontFamily: 'Syne' }}>Owner</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <FinanceCard emoji="💰" label="Kas" value={formatRupiah(neraca.kas)} />
+              <FinanceCard emoji="📦" label="Persediaan" value={formatRupiah(neraca.persediaan)} />
+              <FinanceCard emoji="🏭" label="Aset Tetap" value={formatRupiah(neraca.asetTetap)} onClick={() => setActivePage && setActivePage('aset')} />
+              <FinanceCard emoji="🏢" label="Sewa Dibayar Dimuka" value={formatRupiah(neraca.sewaSisa)} sub={`Total ${formatRupiah(neraca.sewaTotal)}`} onClick={() => setActivePage && setActivePage('sewa')} />
+              <FinanceCard emoji="📄" label="Piutang" value={formatRupiah(neraca.piutang)} onClick={() => setActivePage && setActivePage('piutang')} />
+              <FinanceCard emoji="💳" label="Hutang" value={formatRupiah(neraca.hutang)} />
+              <FinanceCard emoji="📈" label="Laba Bersih" value={formatRupiah(neraca.labaBersih)} accent={neraca.labaBersih >= 0 ? '#10d98a' : '#ff4d6a'} />
+              <FinanceCard emoji="🏆" label="Aset Bersih" value={formatRupiah(neraca.asetBersih)} accent="var(--accent-light)" />
+            </div>
+            <p className="text-[11px] mt-3" style={{ color: 'var(--text-muted)' }}>
+              Aset Bersih = Kas + Piutang + Persediaan + Aset Tetap + Sewa Dibayar Dimuka − Hutang.
+              Persediaan = estimasi stok × harga jual. Sewa memakai sisa nilai (belum diamortisasi).
             </p>
           </div>
         )}
