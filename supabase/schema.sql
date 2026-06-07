@@ -208,6 +208,8 @@ CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON public.expenses (created_a
 CREATE INDEX IF NOT EXISTS idx_expenses_category   ON public.expenses (category);
 ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS affects_profit boolean DEFAULT true;
 ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS liability_id uuid;
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS liability_payment_id uuid;
+CREATE INDEX IF NOT EXISTS idx_expenses_liability ON public.expenses (liability_id);
 
 -- Kategori pengeluaran (bisa dikelola dari UI). id = slug text.
 CREATE TABLE IF NOT EXISTS public.expense_categories (

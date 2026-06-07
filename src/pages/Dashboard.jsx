@@ -247,10 +247,12 @@ export default function Dashboard({ stats, transactions, products = [], customer
     const rentAccruedAll = rentAccruedInRange(prepaidRent, null, null)
     const labaBersih = salesAll - opExpenseProfit - rentAccruedAll
     const asetBersih = kas + piutang + persediaan + assetBookTotal + sewaSisa - hutang
+    // Total Pengeluaran Toko (arus kas keluar) = Op + Bayar Hutang + Sewa(cash) + Aset(cash).
+    const pengeluaranToko = opExpenseCash + debtPaymentTotal + prepaidCashTotal + assetCashTotal
     return {
       kas, persediaan, asetTetap: assetBookTotal, asetBeli: assetBuyTotal,
       sewaSisa, sewaTotal: prepaidTotalPaid, sewaCash: prepaidCashTotal, assetCashTotal,
-      piutang, hutang, labaBersih, asetBersih,
+      piutang, hutang, labaBersih, asetBersih, pengeluaranToko,
       salesAll, opExpenseProfit, opExpenseCash, debtPaymentTotal, rentAccruedAll, cashIn,
     }
   }, [isOwner, transactions, expenses, prepaidRent, fixedAssets, products, liabilities, stats])
@@ -322,14 +324,20 @@ export default function Dashboard({ stats, transactions, products = [], customer
           date: l.dueDate || l.date, amount: l.remaining,
         })),
       }
-      case 'laba': return {
-        emoji: '📈', title: 'Laba Bersih', total: neraca.labaBersih,
-        formula: 'Laba Bersih = Penjualan − Pengeluaran Operasional − Beban Sewa Bulanan',
-        rows: [
-          { label: 'Total Penjualan', amount: neraca.salesAll },
-          { label: 'Pengeluaran Operasional', amount: -neraca.opExpenseProfit },
-          { label: 'Beban Sewa (akrual)', amount: -neraca.rentAccruedAll },
-        ],
+      case 'laba': {
+        const opItems = (expenses || []).filter(e => e.affectsProfit !== false)
+          .slice().sort((a, b) => new Date(b.date) - new Date(a.date))
+        const rows = [
+          { label: '▸ PEMASUKAN — Total Penjualan', amount: neraca.salesAll },
+          { label: '▸ PENGELUARAN OPERASIONAL', amount: 0 },
+          ...opItems.map(e => ({ label: `   ${e.name || 'Pengeluaran'}`, sub: getCatLabel(e.category), date: e.date, amount: -(Number(e.amount) || 0) })),
+          { label: '   Beban Sewa Bulanan (akrual)', amount: -neraca.rentAccruedAll },
+        ]
+        return {
+          emoji: '📈', title: 'Laba Bersih', total: neraca.labaBersih, manage: 'pengeluaran',
+          formula: `Laba Bersih = Total Penjualan − Pengeluaran Operasional − Beban Sewa Bulanan. Pembayaran hutang TIDAK mengurangi laba. · Arus Kas Keluar = Op + Bayar Hutang + Sewa(cash) + Aset(cash) = ${formatRupiah(neraca.pengeluaranToko)}`,
+          rows,
+        }
       }
       case 'asetBersih': return {
         emoji: '🏆', title: 'Aset Bersih', total: neraca.asetBersih,
@@ -341,6 +349,16 @@ export default function Dashboard({ stats, transactions, products = [], customer
           { label: 'Aset Tetap (nilai buku)', amount: neraca.asetTetap },
           { label: 'Sewa Dibayar Dimuka', amount: neraca.sewaSisa },
           { label: 'Hutang', amount: -neraca.hutang },
+        ],
+      }
+      case 'pengeluaranToko': return {
+        emoji: '🛒', title: 'Total Pengeluaran Toko', total: neraca.pengeluaranToko, manage: 'pengeluaran',
+        formula: 'Total Pengeluaran Toko (Arus Kas Keluar) = Pengeluaran Operasional + Pembayaran Hutang + Pembayaran Sewa (cash) + Pembelian Aset (cash). Ini bukan beban laba — hanya uang keluar.',
+        rows: [
+          { label: 'Pengeluaran Operasional', amount: -neraca.opExpenseCash },
+          { label: 'Pembayaran Hutang', amount: -neraca.debtPaymentTotal },
+          { label: 'Pembayaran Sewa (cash/transfer)', amount: -neraca.sewaCash },
+          { label: 'Pembelian Aset (cash/transfer)', amount: -neraca.assetCashTotal },
         ],
       }
       case 'bayarHutang': return {
@@ -377,7 +395,7 @@ export default function Dashboard({ stats, transactions, products = [], customer
       }
       default: return null
     }
-  }, [finDetail, neraca, debtPayStats, products, fixedAssets, prepaidRent, debts, customers, liabilities, liabilityPayments, admins])
+  }, [finDetail, neraca, debtPayStats, products, fixedAssets, prepaidRent, debts, customers, liabilities, liabilityPayments, expenses, admins])
 
   // ─── Owner-only filter: admin dropdown + date range ───
   // - 'all'      → semua admin gabungan
@@ -997,6 +1015,7 @@ export default function Dashboard({ stats, transactions, products = [], customer
               <FinanceCard emoji="📄" label="Piutang" value={formatRupiah(neraca.piutang)} onClick={() => openFin('piutang')} />
               <FinanceCard emoji="💳" label="Hutang" value={formatRupiah(neraca.hutang)} accent="#ff4d6a" onClick={() => openFin('hutang')} />
               <FinanceCard emoji="🧾" label="Pembayaran Hutang" value={formatRupiah(debtPayStats.month)} sub={`Periode ${formatRupiah(debtPayStats.period)}`} onClick={() => openFin('bayarHutang')} />
+              <FinanceCard emoji="🛒" label="Total Pengeluaran Toko" value={formatRupiah(neraca.pengeluaranToko)} sub="Arus kas keluar" accent="#ff4d6a" onClick={() => openFin('pengeluaranToko')} />
               <FinanceCard emoji="📈" label="Laba Bersih" value={formatRupiah(neraca.labaBersih)} accent={neraca.labaBersih >= 0 ? '#10d98a' : '#ff4d6a'} onClick={() => openFin('laba')} />
               <FinanceCard emoji="🏆" label="Aset Bersih" value={formatRupiah(neraca.asetBersih)} accent="var(--accent-light)" onClick={() => openFin('asetBersih')} />
             </div>

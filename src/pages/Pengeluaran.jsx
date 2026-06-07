@@ -238,6 +238,7 @@ export default function Pengeluaran({
             {filtered.map((e, idx) => {
               const catLabel = catLabelOf(e.category)
               const payLabel = (PAYMENT_OPTIONS.find(o => o.id === e.paymentMethod)?.label) || e.paymentMethod
+              const isDebtPay = !!e.liabilityId   // pembayaran hutang → dikelola di modul Hutang
               return (
                 <div key={e.id}
                   className="rounded-2xl p-4 animate-fadeIn flex flex-col sm:flex-row sm:items-center gap-3"
@@ -257,6 +258,10 @@ export default function Pengeluaran({
                           style={{ background: 'rgba(139,92,246,0.12)', color: 'var(--accent-light)', fontFamily: 'Syne', border: '1px solid rgba(139,92,246,0.2)' }}>
                           {catLabel}
                         </span>
+                        {isDebtPay && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                            style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', fontFamily: 'Syne' }}>dari Hutang</span>
+                        )}
                       </div>
                       <div className="text-xs mt-1 flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-muted)' }}>
                         <span className="inline-flex items-center gap-1"><CalendarDays size={11} /> {formatDate(e.date)}</span>
@@ -274,9 +279,9 @@ export default function Pengeluaran({
                       {formatRupiah(e.amount)}
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
-                      <button onClick={() => openEdit(e)} title="Edit"
+                      <button onClick={() => isDebtPay ? toast.error('Pembayaran hutang diedit dari menu Hutang') : openEdit(e)} title={isDebtPay ? 'Edit di menu Hutang' : 'Edit'}
                         className="w-9 h-9 rounded-xl flex items-center justify-center btn-press"
-                        style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                        style={{ background: 'var(--bg-elevated)', color: isDebtPay ? 'var(--text-muted)' : 'var(--text-secondary)', border: '1px solid var(--border)', opacity: isDebtPay ? 0.5 : 1 }}>
                         <Edit2 size={14} />
                       </button>
                       <button onClick={() => setDelTarget(e)} title="Hapus"

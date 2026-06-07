@@ -167,6 +167,7 @@ const expenseFromDB = (r) => ({
   paymentMethod: r.payment_method || 'cash',
   affectsProfit: r.affects_profit === false ? false : true,
   liabilityId: r.liability_id || null,
+  liabilityPaymentId: r.liability_payment_id || null,
   cashierId: r.cashier_id || null,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -181,6 +182,7 @@ const expenseToDB = (e) => ({
   payment_method: e.paymentMethod || 'transfer',
   affects_profit: e.affectsProfit === false ? false : true,
   liability_id: e.liabilityId || null,
+  liability_payment_id: e.liabilityPaymentId || null,
   cashier_id: e.cashierId || null,
 })
 
@@ -709,11 +711,26 @@ export function useStore() {
   }), [wrap])
 
   const deleteExpense = useCallback(async (id) => wrap(async () => {
+    // Jika expense ini adalah PEMBAYARAN HUTANG → balikkan: hapus liability_payment
+    // terkait & kurangi liabilities.paid (sisa hutang bertambah lagi).
+    const target = expenses.find(x => x.id === id)
+    if (target?.liabilityId) {
+      const pay = (liabilityPayments || []).find(p => p.expenseId === id || p.id === target.liabilityPaymentId)
+      if (pay) {
+        await supabase.from('liability_payments').delete().eq('id', pay.id)
+        const liab = liabilities.find(l => l.id === target.liabilityId)
+        if (liab) {
+          const newPaid = Math.max(0, (Number(liab.paid) || 0) - (Number(pay.amount) || 0))
+          await supabase.from('liabilities').update({ paid: newPaid }).eq('id', liab.id)
+        }
+      }
+    }
     const { error: e } = await supabase.from('expenses').delete().eq('id', id)
     if (e) return { ok: false, error: e.message }
     if (mounted.current) setExpenses(prev => prev.filter(x => x.id !== id))
+    if (target?.liabilityId) await Promise.all([refreshLiabilities(), refreshLiabilityPayments()])
     return { ok: true }
-  }), [wrap])
+  }), [wrap, expenses, liabilityPayments, liabilities, refreshLiabilities, refreshLiabilityPayments])
 
   // ---------- EXPENSE CATEGORIES (kategori pengeluaran, tersimpan di DB) ----------
   const addExpenseCategory = useCallback(async ({ label, icon }) => wrap(async () => {
@@ -879,11 +896,13 @@ export function useStore() {
       cashier_id: currentUser?.id || null,
     }).select().single()
     if (exErr) return { ok: false, error: exErr.message }
-    const { error: lpErr } = await supabase.from('liability_payments').insert({
+    const { data: lpRow, error: lpErr } = await supabase.from('liability_payments').insert({
       liability_id: liab.id, payment_date: pdate, amount: amt,
       payment_method: pmethod, notes: notes || '', expense_id: exRow.id, created_by: currentUser?.id || null,
-    })
+    }).select().single()
     if (lpErr) return { ok: false, error: lpErr.message }
+    // Back-link: simpan id pembayaran ke expense (relasi dua arah utk audit).
+    if (lpRow?.id) await supabase.from('expenses').update({ liability_payment_id: lpRow.id }).eq('id', exRow.id)
     const newPaid = (Number(liab.paid) || 0) + amt
     const { error: upErr } = await supabase.from('liabilities').update({ paid: newPaid }).eq('id', liab.id)
     if (upErr) return { ok: false, error: upErr.message }
